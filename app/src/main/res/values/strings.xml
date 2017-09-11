@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">TopWatch</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="shared_preferences_tag">SHARED_PREFERENCES</string>
+    <string name="split_list_tag">SPLIT_LIST</string>
+    <string name="elapsed_time">ELAPSED_TIME</string>
+    <string name="last_start_time">LAST_START_TIME</string>
+    <string name="current_split_elapsed_time">CS_ELAPSED_TIME</string>
+    <string name="current_split_last_start_time">CS_LAST_START_TIME</string>
+    <string name="is_running">IS_RUNNING</string>
+
+</resources>

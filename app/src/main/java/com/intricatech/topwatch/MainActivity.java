@@ -32,7 +32,7 @@ import java.util.TimerTask;
 public class MainActivity extends AppCompatActivity implements
     NewSplitListener{
 
-    private String TAG;
+    private String TAG;  // The tag
     private static final int FINE_LOCATION_REQUEST_CODE = 111;
 
     private LocationManager locationManager;

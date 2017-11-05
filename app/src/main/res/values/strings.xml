@@ -9,5 +9,6 @@
     <string name="current_split_elapsed_time">CS_ELAPSED_TIME</string>
     <string name="current_split_last_start_time">CS_LAST_START_TIME</string>
     <string name="is_running">IS_RUNNING</string>
+    <string name="enter_routename_prompt">Enter a name for this route :</string>
 
 </resources>

@@ -2,6 +2,7 @@ package com.intricatech.topwatch;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -12,13 +13,16 @@ import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.text.SpannableString;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -35,6 +39,11 @@ public class MainActivity extends AppCompatActivity implements
     private String TAG;  // The tag
     private static final int FINE_LOCATION_REQUEST_CODE = 111;
 
+    private static final String LAP_BUTTON_RUNNING_TEXT = "LAP";
+    private static final String LAP_BUTTON_PAUSED_TEXT = "SAVE";
+
+    private String routeNameChosenByUser;
+
     private LocationManager locationManager;
     private LocationListener locationListener;
     private DecimalFormat locationFormatter = new DecimalFormat("###.###");
@@ -49,6 +58,7 @@ public class MainActivity extends AppCompatActivity implements
     private Button lapButton, resetButton;
     private TextView latitudeTV, longitudeTV;
     private TextView altitudeTV, speedTV;
+    private TextView routeNameTV;
 
     private boolean locationPermissionGranted;
 
@@ -78,6 +88,8 @@ public class MainActivity extends AppCompatActivity implements
         });
 
         stopWatch = new StopWatch(this);
+
+        routeNameTV = (TextView) findViewById(R.id.route_name);
 
         mainTimerTV = (TextView) findViewById(R.id.main_time_readout);
         mainTimerTV.setText(StopWatch.getTimeAsSpannableString(0));
@@ -111,6 +123,10 @@ public class MainActivity extends AppCompatActivity implements
         stopWatch.loadSharedPreferencesOnStart();
         if (stopWatch.isRunning()) {
             setResetButtonEnabled(false);
+            setLapButtonText(true);
+        } else {
+            setResetButtonEnabled(true);
+            setLapButtonText(false);
         }
         locationPermissionGranted = checkForLocationPermission();
         if (!locationPermissionGranted) {
@@ -236,10 +252,13 @@ public class MainActivity extends AppCompatActivity implements
         if (!stopWatch.isRunning()) {
             playButton.setImageResource(R.drawable.play_icon_stopwatch);
             setResetButtonEnabled(true);
+            setLapButtonText(false);
 
         } else {
             playButton.setImageResource(R.drawable.pause_icon_stopwatch);
-            setResetButtonEnabled(false);        }
+            setResetButtonEnabled(false);
+            setLapButtonText(true);
+        }
     }
 
     /**
@@ -257,17 +276,35 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     /**
+     * Sets the text of the lap button. If the stopWatch is running, the lap button should show "LAP".
+     * If not, it shows "SAVE", as this button serves the second function of storing the completed
+     * route data.
+     * @param isRunning stopWatch.isRunning should be supplied as the parameter.
+     */
+    private void setLapButtonText(boolean isRunning) {
+        if (isRunning) {
+            lapButton.setText(LAP_BUTTON_RUNNING_TEXT);
+        } else {
+            lapButton.setText(LAP_BUTTON_PAUSED_TEXT);
+        }
+    }
+
+    /**
      * Method passes the button press on to the model Stopwatch object.
      * @param view
      */
     public void onLapButtonPressed(View view) {
-        stopWatch.onLapButtonPressed();
+
+        if (stopWatch.isRunning()) {
+            stopWatch.onLapButtonPressed();
+        } else {
+            Log.d(TAG, "Save button pressed");
+            promptUserForRouteName();
+        }
     }
 
-    public void onResetButtonPressed(View view) {
-        stopWatch.onResetButtonPressed();
-        splitLayout.removeAllViews();
-        playButton.setImageResource(R.drawable.play_icon_stopwatch);
+    public void onRouteNameTVPressed(View view) {
+        Log.d(TAG, "onRouteNameTVPressed() invoked");
     }
 
     /**
@@ -315,6 +352,38 @@ public class MainActivity extends AppCompatActivity implements
         } else {
             GPSGridLayout.setVisibility(View.GONE);
         }
+    }
+
+    private void promptUserForRouteName() {
+
+        LayoutInflater layoutInflater = LayoutInflater.from(this);
+        View promptView = layoutInflater.inflate(R.layout.route_name_prompt, null);
+
+        AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(this);
+        dialogBuilder.setView(promptView);
+        final EditText userInput = (EditText) promptView.findViewById(R.id.routename_edittext);
+
+        dialogBuilder.setCancelable(false)
+                .setPositiveButton("OK",
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                routeNameChosenByUser = userInput.getText().toString();
+                                routeNameTV.setText(routeNameChosenByUser);
+                            }
+                        })
+                .setNegativeButton("Cancel",
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                dialog.cancel();
+                            }
+                        }
+                );
+
+        AlertDialog dialog = dialogBuilder.create();
+        dialog.show();
+
     }
 
     @Override

@@ -5,12 +5,15 @@ import android.content.SharedPreferences;
 import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.style.RelativeSizeSpan;
-import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.concurrent.TimeUnit;
 
@@ -26,6 +29,21 @@ public class StopWatch {
      * A reference to the parent Activity, used for callbacks.
      */
     private MainActivity callbackActivity;
+
+    /**
+     * A simplified interface for a DBHelper object (extends SQLiteOpenHelper)
+     */
+    private DatabaseFacade databaseFacade;
+
+    /**
+     * The session currently held in memory.
+     */
+    private Session session;
+
+    /**
+     * The current date;
+     */
+    private Date currentDate;
 
     /**
      * The total time (nanoseconds) that the timer has been running.
@@ -52,8 +70,6 @@ public class StopWatch {
      */
     private long currentSplitLastStartTime;
 
-    private LinkedList<Split> splitList;
-
     private static final String COLON_SEPARATOR = " : ";
 
     /**
@@ -62,17 +78,21 @@ public class StopWatch {
     private SharedPreferences sharedPreferences;
     private SharedPreferences.Editor sharedPreferencesEditor;
 
+    private RecordingType recordingType;
+
     /**
      * String fields for the SharedPreference Tags.
      */
     private String SHARED_PREF_TAG, SPLIT_LIST_TAG, ELAPSED_TIME, LAST_START_TIME,
-                    CURRENT_SPLIT_ELAPSED_TIME, CURRENT_SPLIT_LAST_START_TIME, IS_RUNNING;
+                    CURRENT_SPLIT_ELAPSED_TIME, CURRENT_SPLIT_LAST_START_TIME, IS_RUNNING,
+                    RECORDING_TYPE;
 
     public StopWatch(MainActivity activity) {
 
         TAG = getClass().getSimpleName();
 
         this.callbackActivity = activity;
+        databaseFacade = new DatabaseFacade(activity);
 
         SHARED_PREF_TAG = activity.getResources().getString(R.string.shared_preferences_tag);
         SPLIT_LIST_TAG = activity.getResources().getString(R.string.split_list_tag);
@@ -81,6 +101,7 @@ public class StopWatch {
         CURRENT_SPLIT_ELAPSED_TIME = activity.getResources().getString(R.string.current_split_elapsed_time);
         CURRENT_SPLIT_LAST_START_TIME = activity.getResources().getString(R.string.current_split_last_start_time);
         IS_RUNNING = activity.getResources().getString(R.string.is_running);
+        RECORDING_TYPE = "RECORDING_TYPE";
         sharedPreferences = callbackActivity.getSharedPreferences(SHARED_PREF_TAG, Context.MODE_PRIVATE);
         sharedPreferencesEditor = sharedPreferences.edit();
 
@@ -89,7 +110,11 @@ public class StopWatch {
         lastStartTime = 0;
         currentSplitLastStartTime = 0;
         isRunning = false;
-        splitList = new LinkedList<>();
+        recordingType = RecordingType.NEW_RECORDING;
+
+        currentDate = getCurrentDateWithoutTime();
+
+        session = new Session(currentDate);
     }
 
     /**
@@ -117,6 +142,14 @@ public class StopWatch {
     }
 
     /**
+     * Save the current session wrapped in a new Route object to the database.
+     * @param name A string chosen by the user.
+     */
+    public void saveNewRouteToDB(String name) {
+        databaseFacade.saveNewRouteToDB(name, session);
+    }
+
+    /**
      * Handles button press from the parent activity. Sets all relevant fields to zero, and creates
      * a new empty splitList.
      */
@@ -126,7 +159,7 @@ public class StopWatch {
         lastStartTime = 0;
         currentSplitLastStartTime = 0;
         isRunning = false;
-        splitList = new LinkedList<>();
+        session.resetSplitList();
     }
 
     /**
@@ -165,8 +198,8 @@ public class StopWatch {
     public void createSplit() {
         long currentTime = getCurrentTime();
         long nanos = currentSplitElapsedTime + currentTime - currentSplitLastStartTime;
-        Split split = new Split(nanos, splitList.size());
-        splitList.add(split);
+        Split split = new Split(nanos, session.getSplitList().size());
+        session.getSplitList().add(split);
         callbackActivity.onNewSplitCreated(getMostRecentSplitAsString());
     }
 
@@ -206,8 +239,8 @@ public class StopWatch {
      * or null if splitList is empty.
      */
     public SpannableString getMostRecentSplitAsString() {
-        if (!splitList.isEmpty()) {
-            Split spl = splitList.getLast();
+        if (!session.getSplitList().isEmpty()) {
+            Split spl = session.getSplitList().getLast();
             long splitTime = spl.getSplitTime();
             int index = spl.getIndex();
 
@@ -309,7 +342,7 @@ public class StopWatch {
 
     public void saveSharedPreferencesOnStop() {
         Gson gson = new Gson();
-        String jsonString = gson.toJson(splitList);
+        String jsonString = gson.toJson(session.getSplitList());
 
         sharedPreferencesEditor.putLong(ELAPSED_TIME, elapsedTime);
         sharedPreferencesEditor.putLong(LAST_START_TIME, lastStartTime);
@@ -317,21 +350,20 @@ public class StopWatch {
         sharedPreferencesEditor.putLong(CURRENT_SPLIT_LAST_START_TIME, currentSplitLastStartTime);
         sharedPreferencesEditor.putString(SPLIT_LIST_TAG, jsonString);
         sharedPreferencesEditor.putBoolean(IS_RUNNING, isRunning);
+        sharedPreferencesEditor.putInt(RECORDING_TYPE, recordingType.ordinal());
 
         sharedPreferencesEditor.commit();
-
-
     }
-
 
     public void loadSharedPreferencesOnStart() {
         Gson gson = new Gson();
-        splitList = new LinkedList<>();
+        LinkedList<Split> retrievedList;
         String jsonString = sharedPreferences.getString(SPLIT_LIST_TAG, "");
         Type type = new TypeToken<LinkedList<Split>>(){}.getType();
         if (jsonString != "") {
-            splitList = gson.fromJson(jsonString, type);
-            for(Split s : splitList) {
+            retrievedList = gson.fromJson(jsonString, type);
+            session.setSplitList(retrievedList);
+            for(Split s : retrievedList) {
                 callbackActivity.onNewSplitCreated(getSplitAsString(s));
             }
         }
@@ -340,10 +372,30 @@ public class StopWatch {
         currentSplitElapsedTime = sharedPreferences.getLong(CURRENT_SPLIT_ELAPSED_TIME, 0);
         currentSplitLastStartTime = sharedPreferences.getLong(CURRENT_SPLIT_LAST_START_TIME, 0);
         isRunning = sharedPreferences.getBoolean(IS_RUNNING, false);
+        recordingType = RecordingType.values()[sharedPreferences.getInt(RECORDING_TYPE, 0)];
     }
     
     private long getCurrentTime() {
         return SystemClock.elapsedRealtimeNanos();
     }
 
+    /**
+     * Utility method to remove the time information from a date.
+     * @return the date with zero time.
+     */
+    public Date getCurrentDateWithoutTime() {
+        Date dateWithTime = new Date();
+        DateFormat formatter = new SimpleDateFormat("dd/MM/yyyy");
+        Date dateWithoutTime = null;
+        try {
+            dateWithoutTime = formatter.parse(formatter.format(dateWithTime));
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        return dateWithoutTime;
+    }
+
+    public RecordingType getRecordingType() {
+        return recordingType;
+    }
 }

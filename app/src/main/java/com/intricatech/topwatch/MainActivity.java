@@ -30,11 +30,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity implements
-    NewSplitListener{
+    NewSplitListener, OnDestroyDirector{
 
     private String TAG;  // The tag
     private static final int FINE_LOCATION_REQUEST_CODE = 111;
@@ -61,6 +63,7 @@ public class MainActivity extends AppCompatActivity implements
     private TextView routeNameTV;
 
     private boolean locationPermissionGranted;
+    private List<OnDestroyObserver> observers;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +75,7 @@ public class MainActivity extends AppCompatActivity implements
         setContentView(R.layout.activity_main);
         //Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         //setSupportActionBar(toolbar);
+        observers = new ArrayList<>();
 
         longitudeTV = (TextView) findViewById(R.id.longitute_tv);
         latitudeTV = (TextView) findViewById(R.id.latitude_tv);
@@ -298,8 +302,14 @@ public class MainActivity extends AppCompatActivity implements
         if (stopWatch.isRunning()) {
             stopWatch.onLapButtonPressed();
         } else {
-            Log.d(TAG, "Save button pressed");
-            promptUserForRouteName();
+            switch (stopWatch.getRecordingType()) {
+                case NEW_RECORDING:
+                    String routeName = promptUserForRouteName();
+                    stopWatch.saveNewRouteToDB(routeName);
+                    break;
+                case EXISTING_ROUTE:
+                    break;
+            }
         }
     }
 
@@ -354,7 +364,7 @@ public class MainActivity extends AppCompatActivity implements
         }
     }
 
-    private void promptUserForRouteName() {
+    private String promptUserForRouteName() {
 
         LayoutInflater layoutInflater = LayoutInflater.from(this);
         View promptView = layoutInflater.inflate(R.layout.route_name_prompt, null);
@@ -383,7 +393,7 @@ public class MainActivity extends AppCompatActivity implements
 
         AlertDialog dialog = dialogBuilder.create();
         dialog.show();
-
+        return userInput.getText().toString();
     }
 
     @Override
@@ -406,5 +416,27 @@ public class MainActivity extends AppCompatActivity implements
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void register(OnDestroyObserver observer) {
+        observers.add(observer);
+    }
+
+    @Override
+    public void deregister(OnDestroyObserver observer) {
+        observers.remove(observer);
+    }
+
+    @Override
+    public void deregisterAll() {
+        observers.clear();
+    }
+
+    @Override
+    public void updateObservers() {
+        for (OnDestroyObserver ob : observers) {
+            ob.onActivityDestroyed();
+        }
     }
 }

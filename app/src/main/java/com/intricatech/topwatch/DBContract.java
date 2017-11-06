@@ -10,6 +10,9 @@ public class DBContract {
 
     private DBContract() {}
 
+    public static String DATABASE_NAME = "topwatch_database";
+    public static int DATABASE_VERSION = 1;
+
     public static class RouteList implements BaseColumns{
 
         public static final String TABLE_NAME = "route_list";

@@ -24,8 +24,8 @@ public final class Split {
 
 
     /**
-     * 
-     * @param nanos
+     *
+     * @param nanos time
      * @param index
      */
     public Split(long nanos, int index) {

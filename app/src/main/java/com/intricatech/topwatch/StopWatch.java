@@ -41,6 +41,10 @@ public class StopWatch {
     private Session session;
 
     /**
+     * The current route, null if using stopwatch to record a new session.
+     */
+    private Route route;
+    /**
      * The current date;
      */
     private Date currentDate;
@@ -92,7 +96,7 @@ public class StopWatch {
         TAG = getClass().getSimpleName();
 
         this.callbackActivity = activity;
-        databaseFacade = new DatabaseFacade(activity);
+        databaseFacade = DatabaseFacade.getInstance(activity);
 
         SHARED_PREF_TAG = activity.getResources().getString(R.string.shared_preferences_tag);
         SPLIT_LIST_TAG = activity.getResources().getString(R.string.split_list_tag);
@@ -115,6 +119,7 @@ public class StopWatch {
         currentDate = getCurrentDateWithoutTime();
 
         session = new Session(currentDate);
+        route = null;
     }
 
     /**
@@ -146,7 +151,14 @@ public class StopWatch {
      * @param name A string chosen by the user.
      */
     public void saveNewRouteToDB(String name) {
-        databaseFacade.saveNewRouteToDB(name, session);
+        databaseFacade.saveNewRouteToDB(name, session, 0);
+    }
+
+    /**
+     * Add the current session to the current Route in the database.
+     */
+    public void saveNewSessionToDB() {
+        databaseFacade.saveSessionToDB(route.getName(), session);
     }
 
     /**

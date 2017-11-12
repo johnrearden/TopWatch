@@ -1,6 +1,7 @@
 package com.intricatech.topwatch;
 
 import android.provider.BaseColumns;
+import android.util.Log;
 
 /**
  * Created by Bolgbolg on 20/09/2017.
@@ -10,6 +11,7 @@ public class DBContract {
 
     private DBContract() {}
 
+    public static final String TAG = "DBContract";
     public static String DATABASE_NAME = "topwatch_database";
     public static int DATABASE_VERSION = 1;
 
@@ -30,7 +32,7 @@ public class DBContract {
                 + RouteList.COLUMN_NAME_NAME + " TEXT NOT NULL, "
                 + RouteList.COLUMN_NAME_NUMBER_OF_SPLITS + " INTEGER, "
                 + RouteList.COLUMN_NAME_DISTANCE + " REAL, "
-                + RouteList.COLUMN_NAME_SPLIT_DISTANCES + " BLOB"
+                + RouteList.COLUMN_NAME_SPLIT_DISTANCES + " STRING" // stored as csv
                 + ")";
 
         public static final String SQL_DELETE_ROUTE_LIST_TABLE =
@@ -39,33 +41,41 @@ public class DBContract {
 
     public static class RouteInfo implements BaseColumns {
 
-        private static String TABLE_NAME;
+        private static String tableName;
 
         public static final String COLUMN_NAME_ID = "_id";
-        public static final String COLUMN_NAME_SPLIT_TIMES = "split_times";
-        public static final String COLUMN_NAME_GPS_POINTS = "gps_points";
+        public static final String COLUMN_NAME_DATE = "date";
+        public static final String COLUMN_NAME_TOTAL_TIME = "total_time";
+        public static final String COLUMN_NAME_SPLIT_TAG = "split_";
+        public static final String TABLE_NAME_PREFIX = "route_";
 
-        public static String getCreateTableString (int tableID) {
+        public static String getCreateRouteDataTableString (String routeName, int numberOfSplits) {
 
-            TABLE_NAME = "route_" + String.valueOf(tableID);
+            tableName = TABLE_NAME_PREFIX + routeName;
 
-            final String SQL_CREATE_ROUTE_LIST_TABLE =
-                    "CREATE TABLE"
-                    + TABLE_NAME + " ("
-                    + RouteInfo.COLUMN_NAME_ID + " INTEGER PRIMARY KEY"
-                    + RouteInfo.COLUMN_NAME_SPLIT_TIMES + " BLOB"
-                    + RouteInfo.COLUMN_NAME_GPS_POINTS + " BLOB"
-                    + ")";
+            StringBuilder sb = new StringBuilder();
+            sb.append("CREATE TABLE "
+                    + tableName + " ("
+                    + RouteInfo.COLUMN_NAME_ID + " INTEGER PRIMARY KEY,"
+                    + RouteInfo.COLUMN_NAME_DATE + " INTEGER,"
+                    + RouteInfo.COLUMN_NAME_TOTAL_TIME + " INTEGER");
+            for (int i = 0; i < numberOfSplits; i++) {
+                sb.append("," + RouteInfo.COLUMN_NAME_SPLIT_TAG + String.valueOf(i) + " INTEGER");
+            }
+            sb.append(")");
 
-            return SQL_CREATE_ROUTE_LIST_TABLE;
+            String str = sb.toString();
+            Log.d(TAG, str);
+
+            return str;
         }
 
         public static String getDeleteRouteInfoString(int tableID) {
 
-            TABLE_NAME = "route_" + String.valueOf(tableID);
+            tableName = "route_" + String.valueOf(tableID);
 
             final String SQL_DELETE_ROUTE_INFO_TABLE =
-                    "DROP TABLE IF EXISTS " + TABLE_NAME;
+                    "DROP TABLE IF EXISTS " + tableName;
 
             return SQL_DELETE_ROUTE_INFO_TABLE;
 

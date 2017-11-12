@@ -15,6 +15,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.text.SpannableString;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -23,6 +24,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -35,8 +37,10 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class MainActivity extends AppCompatActivity implements
-    NewSplitListener, OnDestroyDirector{
+public class MainActivity extends AppCompatActivity
+        implements  NewSplitListener,
+                    OnDestroyDirector,
+                    OnRouteChosenListener{
 
     private String TAG;  // The tag
     private static final int FINE_LOCATION_REQUEST_CODE = 111;
@@ -51,18 +55,22 @@ public class MainActivity extends AppCompatActivity implements
     private DecimalFormat locationFormatter = new DecimalFormat("###.###");
 
     private StopWatch stopWatch;
+    private DatabaseFacade databaseFacade;
     private Timer timer;
+
+    private Toolbar toolbar;
     private TextView mainTimerTV;
     private TextView timeSinceLastSplitTV;
+    private FrameLayout routeChooserLayout;
     private LinearLayout splitLayout;
     private GridLayout GPSGridLayout;
     private ImageButton playButton;
     private Button lapButton, resetButton;
     private TextView latitudeTV, longitudeTV;
     private TextView altitudeTV, speedTV;
-    private TextView routeNameTV;
 
     private boolean locationPermissionGranted;
+    private boolean showLocationInfo;
     private List<OnDestroyObserver> observers;
 
     @Override
@@ -75,12 +83,16 @@ public class MainActivity extends AppCompatActivity implements
         setContentView(R.layout.activity_main);
         //Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         //setSupportActionBar(toolbar);
+        toolbar = (Toolbar) findViewById(R.id.my_toolbar);
+        setSupportActionBar(toolbar);
+
         observers = new ArrayList<>();
 
         longitudeTV = (TextView) findViewById(R.id.longitute_tv);
         latitudeTV = (TextView) findViewById(R.id.latitude_tv);
         altitudeTV = (TextView) findViewById(R.id.altitude_tv);
         speedTV = (TextView) findViewById(R.id.speed_tv);
+        showLocationInfo = false;
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
@@ -93,8 +105,6 @@ public class MainActivity extends AppCompatActivity implements
 
         stopWatch = new StopWatch(this);
 
-        routeNameTV = (TextView) findViewById(R.id.route_name);
-
         mainTimerTV = (TextView) findViewById(R.id.main_time_readout);
         mainTimerTV.setText(StopWatch.getTimeAsSpannableString(0));
 
@@ -103,6 +113,7 @@ public class MainActivity extends AppCompatActivity implements
 
         splitLayout = (LinearLayout) findViewById(R.id.split_times_linearlayout);
         GPSGridLayout = (GridLayout) findViewById(R.id.gps_gridlayout);
+        routeChooserLayout = (FrameLayout) findViewById(R.id.route_chooser_layout);
 
         playButton = (ImageButton) findViewById(R.id.play_pause_button);
         resetButton = (Button) findViewById(R.id.stop_button);
@@ -116,6 +127,8 @@ public class MainActivity extends AppCompatActivity implements
             }
         });
         lapButton = (Button) findViewById(R.id.lap_button);
+
+        databaseFacade = DatabaseFacade.getInstance(this);
     }
 
 
@@ -124,6 +137,9 @@ public class MainActivity extends AppCompatActivity implements
     public void onStart() {
         super.onStart();
         Log.d(TAG, "onStart() invoked");
+
+
+
         stopWatch.loadSharedPreferencesOnStart();
         if (stopWatch.isRunning()) {
             setResetButtonEnabled(false);
@@ -257,12 +273,28 @@ public class MainActivity extends AppCompatActivity implements
             playButton.setImageResource(R.drawable.play_icon_stopwatch);
             setResetButtonEnabled(true);
             setLapButtonText(false);
-
         } else {
             playButton.setImageResource(R.drawable.pause_icon_stopwatch);
             setResetButtonEnabled(false);
             setLapButtonText(true);
         }
+    }
+
+    public void onShowRouteButtonPressed(View view) {
+        Log.d(TAG, "Show Route button pressed");
+        ArrayList<String> routeList = databaseFacade.getArrayListOfRoutes();
+
+        Bundle bundle = new Bundle();
+        String key = getResources().getString(R.string.string_array_list);
+        bundle.putStringArrayList(key, routeList);
+        RouteChooserFragment routeChooserFragment = new RouteChooserFragment();
+        routeChooserFragment.setArguments(bundle);
+
+        routeChooserLayout.setVisibility(View.VISIBLE);
+        getSupportFragmentManager().beginTransaction()
+                .addToBackStack(null)
+                .add(R.id.route_chooser_layout, routeChooserFragment)
+                .commit();
     }
 
     /**
@@ -305,12 +337,17 @@ public class MainActivity extends AppCompatActivity implements
             switch (stopWatch.getRecordingType()) {
                 case NEW_RECORDING:
                     String routeName = promptUserForRouteName();
-                    stopWatch.saveNewRouteToDB(routeName);
+                    //stopWatch.saveNewRouteToDB(routeName);
                     break;
                 case EXISTING_ROUTE:
+                    stopWatch.saveNewSessionToDB();
                     break;
             }
         }
+    }
+
+    private void onRouteNameEntered(String routeName) {
+        stopWatch.saveNewRouteToDB(routeName);
     }
 
     public void onRouteNameTVPressed(View view) {
@@ -357,7 +394,7 @@ public class MainActivity extends AppCompatActivity implements
      * and hides it otherwise.
      */
     private void setGPSLayoutVisibility() {
-        if (locationPermissionGranted) {
+        if (locationPermissionGranted && showLocationInfo) {
             GPSGridLayout.setVisibility(View.VISIBLE);
         } else {
             GPSGridLayout.setVisibility(View.GONE);
@@ -379,7 +416,8 @@ public class MainActivity extends AppCompatActivity implements
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
                                 routeNameChosenByUser = userInput.getText().toString();
-                                routeNameTV.setText(routeNameChosenByUser);
+                                getSupportActionBar().setTitle(routeNameChosenByUser);
+                                onRouteNameEntered(routeNameChosenByUser);
                             }
                         })
                 .setNegativeButton("Cancel",
@@ -410,9 +448,12 @@ public class MainActivity extends AppCompatActivity implements
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
+        switch(id) {
+            case R.id.action_choose_route:
+                onShowRouteButtonPressed(null);
+                break;
+            case R.id.action_settings:
+                return true;
         }
 
         return super.onOptionsItemSelected(item);
@@ -438,5 +479,12 @@ public class MainActivity extends AppCompatActivity implements
         for (OnDestroyObserver ob : observers) {
             ob.onActivityDestroyed();
         }
+    }
+
+    @Override
+    public void onRouteChosen(String routeName) {
+        getSupportActionBar().setTitle(routeName);
+        getSupportFragmentManager().popBackStack();
+        routeChooserLayout.setVisibility(View.GONE);
     }
 }

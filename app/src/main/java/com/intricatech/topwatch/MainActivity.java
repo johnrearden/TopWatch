@@ -3,6 +3,7 @@ package com.intricatech.topwatch;
 import android.Manifest;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
@@ -51,6 +52,7 @@ public class MainActivity extends AppCompatActivity
     private String routeNameChosenByUser;
 
     private LocationManager locationManager;
+    private Vibrations vibrations;
     private LocationListener locationListener;
     private DecimalFormat locationFormatter = new DecimalFormat("###.###");
 
@@ -77,6 +79,12 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
 
         super.onCreate(savedInstanceState);
+        Intent intent = new Intent(this, LocationTrackerService.class);
+        //startService(intent);
+
+        Vibrations.initialize(getApplicationContext());
+        vibrations = Vibrations.getInstance();
+
 
         TAG = getClass().getSimpleName();
         Log.d(TAG, "onCreate() invoked");
@@ -269,6 +277,7 @@ public class MainActivity extends AppCompatActivity
      */
     public void onPlayButtonPressed(View view) {
         stopWatch.onPlayButtonPressed();
+        vibrations.doLongVibrate();
         if (!stopWatch.isRunning()) {
             playButton.setImageResource(R.drawable.play_icon_stopwatch);
             setResetButtonEnabled(true);
@@ -333,6 +342,7 @@ public class MainActivity extends AppCompatActivity
 
         if (stopWatch.isRunning()) {
             stopWatch.onLapButtonPressed();
+            vibrations.doShortVibrate();
         } else {
             switch (stopWatch.getRecordingType()) {
                 case NEW_RECORDING:
@@ -454,6 +464,11 @@ public class MainActivity extends AppCompatActivity
                 break;
             case R.id.action_settings:
                 return true;
+            case R.id.action_show_map:
+                Log.d(TAG, "action_show_maps selected");
+                Intent intent = new Intent(this, MapActivity.class);
+                startActivity(intent);
+                break;
         }
 
         return super.onOptionsItemSelected(item);
@@ -486,5 +501,10 @@ public class MainActivity extends AppCompatActivity
         getSupportActionBar().setTitle(routeName);
         getSupportFragmentManager().popBackStack();
         routeChooserLayout.setVisibility(View.GONE);
+    }
+
+    public void onStopServiceButtonPressed(View view) {
+        Intent intent = new Intent(this, LocationTrackerService.class);
+        stopService(intent);
     }
 }

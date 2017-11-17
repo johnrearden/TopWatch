@@ -200,4 +200,14 @@
         >
     </FrameLayout>
 
+    <Button
+        android:id="@+id/button2"
+        android:layout_toLeftOf="@+id/time_since_last_split"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignStart="@+id/main_time_readout"
+        android:layout_below="@+id/main_time_readout"
+        android:onClick="onStopServiceButtonPressed"
+        android:text="Stop Service" />
+
 </RelativeLayout>

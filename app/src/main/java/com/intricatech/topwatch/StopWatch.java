@@ -74,6 +74,8 @@ public class StopWatch {
      */
     private long currentSplitLastStartTime;
 
+    private boolean newSessionReadyToStart;
+
     private static final String COLON_SEPARATOR = " : ";
 
     /**
@@ -89,7 +91,7 @@ public class StopWatch {
      */
     private String SHARED_PREF_TAG, SPLIT_LIST_TAG, ELAPSED_TIME, LAST_START_TIME,
                     CURRENT_SPLIT_ELAPSED_TIME, CURRENT_SPLIT_LAST_START_TIME, IS_RUNNING,
-                    RECORDING_TYPE;
+                    RECORDING_TYPE, NEW_SESSION_READY_TO_START;
 
     public StopWatch(MainActivity activity) {
 
@@ -106,6 +108,7 @@ public class StopWatch {
         CURRENT_SPLIT_LAST_START_TIME = activity.getResources().getString(R.string.current_split_last_start_time);
         IS_RUNNING = activity.getResources().getString(R.string.is_running);
         RECORDING_TYPE = "RECORDING_TYPE";
+        NEW_SESSION_READY_TO_START = "NEW_SESSION_READY_TO_START";
         sharedPreferences = callbackActivity.getSharedPreferences(SHARED_PREF_TAG, Context.MODE_PRIVATE);
         sharedPreferencesEditor = sharedPreferences.edit();
 
@@ -172,6 +175,7 @@ public class StopWatch {
         currentSplitLastStartTime = 0;
         isRunning = false;
         session.resetSplitList();
+        newSessionReadyToStart = true;
     }
 
     /**
@@ -187,6 +191,7 @@ public class StopWatch {
             long currentTime = getCurrentTime();
             lastStartTime = currentTime;
             currentSplitLastStartTime = currentTime;
+            newSessionReadyToStart = false;
             return false;
         }
     }
@@ -205,6 +210,10 @@ public class StopWatch {
             currentSplitElapsedTime += currentTime - currentSplitLastStartTime;
             return false;
         }
+    }
+
+    public boolean isNewSessionReadyToStart() {
+        return newSessionReadyToStart;
     }
 
     public void createSplit() {
@@ -363,6 +372,7 @@ public class StopWatch {
         sharedPreferencesEditor.putString(SPLIT_LIST_TAG, jsonString);
         sharedPreferencesEditor.putBoolean(IS_RUNNING, isRunning);
         sharedPreferencesEditor.putInt(RECORDING_TYPE, recordingType.ordinal());
+        sharedPreferencesEditor.putBoolean(NEW_SESSION_READY_TO_START, newSessionReadyToStart);
 
         sharedPreferencesEditor.commit();
     }
@@ -385,6 +395,7 @@ public class StopWatch {
         currentSplitLastStartTime = sharedPreferences.getLong(CURRENT_SPLIT_LAST_START_TIME, 0);
         isRunning = sharedPreferences.getBoolean(IS_RUNNING, false);
         recordingType = RecordingType.values()[sharedPreferences.getInt(RECORDING_TYPE, 0)];
+        newSessionReadyToStart = sharedPreferences.getBoolean(NEW_SESSION_READY_TO_START, true);
     }
     
     private long getCurrentTime() {
@@ -395,7 +406,7 @@ public class StopWatch {
      * Utility method to remove the time information from a date.
      * @return the date with zero time.
      */
-    public Date getCurrentDateWithoutTime() {
+    public static Date getCurrentDateWithoutTime() {
         Date dateWithTime = new Date();
         DateFormat formatter = new SimpleDateFormat("dd/MM/yyyy");
         Date dateWithoutTime = null;

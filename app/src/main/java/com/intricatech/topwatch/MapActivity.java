@@ -1,9 +1,14 @@
 package com.intricatech.topwatch;
 
 import android.Manifest;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -15,7 +20,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
-import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 
 /**
@@ -27,6 +32,62 @@ public class MapActivity extends AppCompatActivity
 
     private static String TAG;
     private GoogleMap map;
+    private LocationRecordServer locationTrackerService;
+    private boolean locationServiceBound;
+
+    private LocationRecordClient locationRecordClient = new LocationRecordClient() {
+        @Override
+        public void setLocationRecord(LocationRecord locationRecord) {
+            // NOT USED BY MAP_ACTIVITY.
+        }
+
+        @Override
+        public void setTotalDistance(double totalDistanceTravelled) {
+            // NOT USED BY MAP_ACTIVITY.
+        }
+
+        @Override
+        public void setSplitDistance(double splitDistance) {
+            // NOT USED BY MAP_ACTIVITY.
+        }
+
+        @Override
+        public void setAccuracy(double accuracy) {
+            // NOT USED BY MAP_ACTIVITY.
+        }
+
+        @Override
+        public void updateMap(PolylineOptions options, LatLng latLng) {
+            map.clear();
+            map.addPolyline(options);
+            map.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+        }
+    };
+
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder binder) {
+            locationTrackerService = (LocationRecordServer) binder;
+            try {
+                locationTrackerService.registerActivity(MapActivity.this, locationRecordClient);
+            } catch (Throwable t) {
+                Log.d(TAG, "Woah man, WTF?");
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+        }
+    };
+
+    @Override
+    protected void onPostResume() {
+        super.onPostResume();
+        Intent bindIntent = new Intent(this, LocationTrackerService.class);
+        bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+        locationServiceBound = true;
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -37,6 +98,21 @@ public class MapActivity extends AppCompatActivity
 
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        Intent startIntent = new Intent(this, LocationTrackerService.class);
+        startService(startIntent);
+
+
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if(locationServiceBound) {
+            unbindService(serviceConnection);
+            locationServiceBound = false;
+        }
     }
 
     @Override
@@ -57,10 +133,6 @@ public class MapActivity extends AppCompatActivity
             map.setMyLocationEnabled(true);
         }
         map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-
-        LatLng bandon = new LatLng(51.75, -8.75);
-        map.addMarker(new MarkerOptions().position(bandon).title("Home"));
-        map.moveCamera(CameraUpdateFactory.newLatLng(bandon));
-        map.moveCamera(CameraUpdateFactory.zoomTo(16.0f));
+        map.animateCamera(CameraUpdateFactory.zoomTo(17.0f));
     }
 }

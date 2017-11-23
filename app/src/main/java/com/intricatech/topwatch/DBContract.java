@@ -82,4 +82,66 @@ public class DBContract {
         }
     }
 
+    public static class LocationRecords implements BaseColumns{
+
+        public static String tableName;
+
+        public static final String COL_ID = "_id";
+        public static final String COL_TIMESTAMP = "timestamp";
+        public static final String COL_LATITUDE = "latitude";
+        public static final String COL_LONGITUDE = "longitude";
+        public static final String COL_ELEVATION = "elevation";
+        public static final String COL_PARENT_SPLIT = "parent_split";
+
+        public static final String CURRENT_SESSION_TABLE_NAME = "current_session";
+        public static final String PERSONAL_BEST_SESSION_SUFFEX = "_pb_session";
+
+        public static String getCreatePBSessionTableString (String routeName) {
+            tableName =  routeName + PERSONAL_BEST_SESSION_SUFFEX;
+            StringBuilder sb = new StringBuilder();
+            sb.append("CREATE TABLE "
+                + tableName + " ("
+                + COL_ID + " INTEGER PRIMARY KEY,"
+                + COL_TIMESTAMP + " INTEGER,"
+                + COL_LATITUDE + " REAL,"
+                + COL_LONGITUDE + " REAL,"
+                + COL_ELEVATION + " REAL,"
+                + COL_PARENT_SPLIT + " INTEGER"
+                + ")");
+            return sb.toString();
+        }
+
+        public static String getCreateCurrentSessionTableString () {
+            tableName =  CURRENT_SESSION_TABLE_NAME;
+            StringBuilder sb = new StringBuilder();
+            sb.append("CREATE TABLE "
+                    + tableName + " ("
+                    + COL_ID + " INTEGER PRIMARY KEY,"
+                    + COL_TIMESTAMP + " INTEGER,"
+                    + COL_LATITUDE + " REAL,"
+                    + COL_LONGITUDE + " REAL,"
+                    + COL_ELEVATION + " REAL,"
+                    + COL_PARENT_SPLIT + " INTEGER"
+                    + ")");
+            return sb.toString();
+        }
+
+        public static String getDeletePBSessionTableString (String routeName) {
+            tableName =  routeName + PERSONAL_BEST_SESSION_SUFFEX;
+            final String SQL_DELETE_PB_SESSION_TABLE =
+                    "DROP TABLE IF EXISTS " + tableName;
+            return SQL_DELETE_PB_SESSION_TABLE;
+        }
+
+        public static String getDeleteCurrentSessionTableString () {
+            tableName =  CURRENT_SESSION_TABLE_NAME;
+            final String SQL_DELETE_CURRENT_SESSION_TABLE =
+                    "DROP TABLE IF EXISTS " + tableName;
+            return SQL_DELETE_CURRENT_SESSION_TABLE;
+        }
+
+
+
+    }
+
 }

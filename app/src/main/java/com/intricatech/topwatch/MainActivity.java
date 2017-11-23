@@ -1,15 +1,17 @@
 package com.intricatech.topwatch;
 
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
@@ -31,6 +33,9 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -68,23 +73,71 @@ public class MainActivity extends AppCompatActivity
     private GridLayout GPSGridLayout;
     private ImageButton playButton;
     private Button lapButton, resetButton;
-    private TextView latitudeTV, longitudeTV;
-    private TextView altitudeTV, speedTV;
+    private TextView totalDistanceTV, accuracyTV;
 
     private boolean locationPermissionGranted;
-    private boolean showLocationInfo;
+    private boolean sessionReadyToStart;
     private List<OnDestroyObserver> observers;
+
+    private LocationRecordServer locationService = null;
+    private boolean locationServiceBound;
+    private LocationRecordClient locationRecordClient = new LocationRecordClient() {
+        @Override
+        public void setLocationRecord(LocationRecord locationRecord) {
+            Log.d(TAG, locationRecord.toString());
+        }
+
+        @Override
+        public void setTotalDistance(double totalDistanceTravelled) {
+            totalDistanceTV.setText(
+                    String.format("%.2f", totalDistanceTravelled)
+            );
+        }
+
+        @Override
+        public void setSplitDistance(double splitDistance) {
+
+        }
+
+        @Override
+        public void setAccuracy(double accuracy) {
+            accuracyTV.setText(
+                    String.format("%.2f", accuracy)
+            );
+        }
+
+        @Override
+        public void updateMap(PolylineOptions options, LatLng latLng) {
+            // NOT USED BY MAIN ACTIVITY.
+        }
+    };
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder binder) {
+            locationService = (LocationRecordServer) binder;
+            try {
+                locationService.registerActivity(MainActivity.this, locationRecordClient);
+            } catch (Throwable t) {
+                Log.d(TAG, "Woah man, WTF?");
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
         super.onCreate(savedInstanceState);
-        Intent intent = new Intent(this, LocationTrackerService.class);
-        //startService(intent);
+
+        Intent startIntent = new Intent(this, LocationTrackerService.class);
+        startService(startIntent);
 
         Vibrations.initialize(getApplicationContext());
         vibrations = Vibrations.getInstance();
-
 
         TAG = getClass().getSimpleName();
         Log.d(TAG, "onCreate() invoked");
@@ -95,12 +148,6 @@ public class MainActivity extends AppCompatActivity
         setSupportActionBar(toolbar);
 
         observers = new ArrayList<>();
-
-        longitudeTV = (TextView) findViewById(R.id.longitute_tv);
-        latitudeTV = (TextView) findViewById(R.id.latitude_tv);
-        altitudeTV = (TextView) findViewById(R.id.altitude_tv);
-        speedTV = (TextView) findViewById(R.id.speed_tv);
-        showLocationInfo = false;
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
@@ -119,8 +166,10 @@ public class MainActivity extends AppCompatActivity
         timeSinceLastSplitTV = (TextView) findViewById(R.id.time_since_last_split);
         timeSinceLastSplitTV.setText(StopWatch.getTimeAsSpannableString(0));
 
+        totalDistanceTV = (TextView) findViewById(R.id.total_dist_travelled);
+        accuracyTV = (TextView) findViewById(R.id.accuracy);
+
         splitLayout = (LinearLayout) findViewById(R.id.split_times_linearlayout);
-        GPSGridLayout = (GridLayout) findViewById(R.id.gps_gridlayout);
         routeChooserLayout = (FrameLayout) findViewById(R.id.route_chooser_layout);
 
         playButton = (ImageButton) findViewById(R.id.play_pause_button);
@@ -131,12 +180,13 @@ public class MainActivity extends AppCompatActivity
                 stopWatch.onResetButtonPressed();
                 splitLayout.removeAllViews();
                 playButton.setImageResource(R.drawable.play_icon_stopwatch);
+                locationService.finishSessionAndDelete();
                 return true;
             }
         });
         lapButton = (Button) findViewById(R.id.lap_button);
 
-        databaseFacade = DatabaseFacade.getInstance(this);
+        databaseFacade = DatabaseFacade.getInstance(getApplicationContext());
     }
 
 
@@ -146,16 +196,11 @@ public class MainActivity extends AppCompatActivity
         super.onStart();
         Log.d(TAG, "onStart() invoked");
 
-
-
         stopWatch.loadSharedPreferencesOnStart();
-        if (stopWatch.isRunning()) {
-            setResetButtonEnabled(false);
-            setLapButtonText(true);
-        } else {
-            setResetButtonEnabled(true);
-            setLapButtonText(false);
+        if (stopWatch.isNewSessionReadyToStart()) {
+            sessionReadyToStart = true;
         }
+
         locationPermissionGranted = checkForLocationPermission();
         if (!locationPermissionGranted) {
             requestPermissionIfAppropriate();
@@ -179,7 +224,20 @@ public class MainActivity extends AppCompatActivity
                 });
             }
         }, 4, 4);
-        setGPSLayoutVisibility();
+
+        Intent bindIntent = new Intent(this, LocationTrackerService.class);
+        bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+        locationServiceBound = true;
+
+        if (stopWatch.isRunning()) {
+            playButton.setImageResource(R.drawable.pause_icon_stopwatch);
+            setResetButtonEnabled(false);
+            setLapButtonText(true);
+        } else {
+            playButton.setImageResource(R.drawable.play_icon_stopwatch);
+            setResetButtonEnabled(true);
+            setLapButtonText(false);
+        }
     }
 
 
@@ -189,6 +247,11 @@ public class MainActivity extends AppCompatActivity
         super.onPause();
         Log.d(TAG, "onPause() invoked");
         timer.cancel();
+
+        if (locationServiceBound) {
+            unbindService(serviceConnection);
+        }
+        locationServiceBound = false;
     }
 
     @Override
@@ -199,7 +262,6 @@ public class MainActivity extends AppCompatActivity
         splitLayout.removeAllViews();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED){
-            locationManager.removeUpdates(locationListener);
         }
     }
 
@@ -207,6 +269,8 @@ public class MainActivity extends AppCompatActivity
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy() invoked");
+        locationService.unregisterActivity(this);
+        //unbindService(serviceConnection);
     }
 
     /**
@@ -216,10 +280,8 @@ public class MainActivity extends AppCompatActivity
      */
     private boolean checkForLocationPermission() {
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        locationListener = new MyLocationListener();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED) {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 1, locationListener);
             return true;
         } else {
             return false;
@@ -257,13 +319,11 @@ public class MainActivity extends AppCompatActivity
             case FINE_LOCATION_REQUEST_CODE : {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     locationPermissionGranted = true;
-                    setGPSLayoutVisibility();
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
                             PackageManager.PERMISSION_GRANTED){
                         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 1, locationListener);}
                 } else {
                     locationPermissionGranted = false;
-                    setGPSLayoutVisibility();
                 }
                 Log.d(TAG, "permission granted : " + locationPermissionGranted);
             }
@@ -282,10 +342,17 @@ public class MainActivity extends AppCompatActivity
             playButton.setImageResource(R.drawable.play_icon_stopwatch);
             setResetButtonEnabled(true);
             setLapButtonText(false);
+            locationService.pauseSession();
         } else {
             playButton.setImageResource(R.drawable.pause_icon_stopwatch);
             setResetButtonEnabled(false);
             setLapButtonText(true);
+
+            if (sessionReadyToStart) {
+                locationService.startSession();
+            } else {
+                locationService.restartSession();
+            }
         }
     }
 
@@ -343,6 +410,7 @@ public class MainActivity extends AppCompatActivity
         if (stopWatch.isRunning()) {
             stopWatch.onLapButtonPressed();
             vibrations.doShortVibrate();
+            locationService.newSplitStarted();
         } else {
             switch (stopWatch.getRecordingType()) {
                 case NEW_RECORDING:
@@ -358,6 +426,7 @@ public class MainActivity extends AppCompatActivity
 
     private void onRouteNameEntered(String routeName) {
         stopWatch.saveNewRouteToDB(routeName);
+        locationService.finishSessionAndCommit(routeName);
     }
 
     public void onRouteNameTVPressed(View view) {
@@ -373,42 +442,6 @@ public class MainActivity extends AppCompatActivity
         TextView newSplitTV = (TextView) getLayoutInflater().inflate(R.layout.split_time_element, null, false);
         newSplitTV.setText(spannableString);
         splitLayout.addView(newSplitTV, 0);
-    }
-
-    private class MyLocationListener implements LocationListener {
-        public void onLocationChanged(Location loc) {
-            latitudeTV.setText("Lat: " + String.format(locationFormatter.format(loc.getLatitude())));
-            longitudeTV.setText("Lng: " + String.format(locationFormatter.format(loc.getLongitude())));
-            altitudeTV.setText("Alt: " + String.format(locationFormatter.format(loc.getAltitude())));
-            speedTV.setText("Vel: " + String.format(locationFormatter.format(loc.getSpeed())));
-        }
-
-        @Override
-        public void onStatusChanged(String provider, int status, Bundle extras) {
-
-        }
-
-        @Override
-        public void onProviderEnabled(String provider) {
-
-        }
-
-        @Override
-        public void onProviderDisabled(String provider) {
-
-        }
-    }
-
-    /**
-     * Method shows the GPS information on the screen if location access has been granted,
-     * and hides it otherwise.
-     */
-    private void setGPSLayoutVisibility() {
-        if (locationPermissionGranted && showLocationInfo) {
-            GPSGridLayout.setVisibility(View.VISIBLE);
-        } else {
-            GPSGridLayout.setVisibility(View.GONE);
-        }
     }
 
     private String promptUserForRouteName() {
@@ -504,7 +537,14 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void onStopServiceButtonPressed(View view) {
+        unbindService(serviceConnection);
+        locationServiceBound = false;
         Intent intent = new Intent(this, LocationTrackerService.class);
         stopService(intent);
     }
+
+    public void onPromptServiceForLocationPressed(View view) {
+        Log.d(TAG, locationService.requestNewLocationRecord().toString());
+    }
+
 }

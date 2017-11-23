@@ -4,10 +4,12 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.location.Location;
 import android.util.Log;
 
 import java.util.ArrayList;
 
+import static com.intricatech.topwatch.DBContract.LocationRecords;
 import static com.intricatech.topwatch.DBContract.RouteInfo;
 import static com.intricatech.topwatch.DBContract.RouteList;
 
@@ -17,7 +19,8 @@ import static com.intricatech.topwatch.DBContract.RouteList;
 
 public class DatabaseFacade {
 
-    private final String TAG;
+    private static final String TAG = "DatabaseFacade";
+
     private static DatabaseFacade instance;
     public static DatabaseFacade getInstance(Context context) {
         if (instance != null) {
@@ -32,8 +35,6 @@ public class DatabaseFacade {
     private SQLiteDatabase database;
 
     private DatabaseFacade(Context context) {
-        TAG = getClass().getSimpleName();
-
         helper = new DBHelper(context);
         database = helper.getWritableDatabase();
     }
@@ -166,4 +167,32 @@ public class DatabaseFacade {
 
         return null;
     }
+
+    public void createNewCurrentSessionTable() {
+        database.execSQL(LocationRecords.getCreateCurrentSessionTableString());
+    }
+
+    public void deleteCurrentSessionTable() {
+        database.execSQL(LocationRecords.getDeleteCurrentSessionTableString());
+    }
+
+    public void copyCurrentSessionToPBSession(String routeName) {
+
+    }
+
+    public void commitLocationRecord(long timeStamp, Location location, int splitIndex) {
+        ContentValues values = new ContentValues();
+        values.put(LocationRecords.COL_TIMESTAMP, timeStamp);
+        values.put(LocationRecords.COL_LATITUDE, location.getLatitude());
+        values.put(LocationRecords.COL_LONGITUDE, location.getLongitude());
+        values.put(LocationRecords.COL_ELEVATION, location.getAltitude());
+        values.put(LocationRecords.COL_PARENT_SPLIT, splitIndex);
+
+        database.insert(
+                LocationRecords.CURRENT_SESSION_TABLE_NAME,
+                null,
+                values
+        );
+    }
+
 }

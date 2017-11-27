@@ -60,7 +60,7 @@ public class MapActivity extends AppCompatActivity
         public void updateMap(PolylineOptions options, LatLng latLng) {
             map.clear();
             map.addPolyline(options);
-            map.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+            map.animateCamera(CameraUpdateFactory.newLatLng(latLng));
         }
     };
 
@@ -106,13 +106,19 @@ public class MapActivity extends AppCompatActivity
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-
+    protected void onPause() {
+        super.onPause();
         if(locationServiceBound) {
             unbindService(serviceConnection);
             locationServiceBound = false;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+
     }
 
     @Override

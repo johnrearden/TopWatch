@@ -157,6 +157,28 @@ public class DatabaseFacade {
         return null;*/
     }
 
+    public Cursor getRouteListCursor() {
+        String[] projection = {
+                RouteList.COLUMN_NAME_ID,
+                RouteList.COLUMN_NAME_NAME,
+                RouteList.COLUMN_NAME_DISTANCE,
+                RouteList.COLUMN_NAME_NUMBER_OF_SPLITS,
+                RouteList.COLUMN_NAME_SPLIT_DISTANCES
+        };
+        String sortOrder = RouteList.COLUMN_NAME_DISTANCE + " DESC";
+
+        Cursor cursor = database.query(
+                RouteList.TABLE_NAME,
+                projection,
+                null,
+                null,
+                null,
+                null,
+                sortOrder
+        );
+        return cursor;
+    }
+
     public Session[] getListOfSessionsForRoute(Route route) {
         return null;
     }

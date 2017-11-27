@@ -358,13 +358,8 @@ public class MainActivity extends AppCompatActivity
 
     public void onShowRouteButtonPressed(View view) {
         Log.d(TAG, "Show Route button pressed");
-        ArrayList<String> routeList = databaseFacade.getArrayListOfRoutes();
 
-        Bundle bundle = new Bundle();
-        String key = getResources().getString(R.string.string_array_list);
-        bundle.putStringArrayList(key, routeList);
         RouteChooserFragment routeChooserFragment = new RouteChooserFragment();
-        routeChooserFragment.setArguments(bundle);
 
         routeChooserLayout.setVisibility(View.VISIBLE);
         getSupportFragmentManager().beginTransaction()

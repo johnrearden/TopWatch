@@ -139,6 +139,7 @@ public class LocationTrackerService extends IntentService {
                 locations.add(currentLatLng);
                 polylineOptions.add(currentLatLng).width(25.0f).color(Color.WHITE);
                 double totalDist = SphericalUtil.computeLength(locations);
+
                 for (Activity client : clients.keySet()) {
                     clients.get(client).setTotalDistance(totalDist);
                     clients.get(client).setAccuracy(currentLocation.getAccuracy());

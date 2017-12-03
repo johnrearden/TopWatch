@@ -11,22 +11,17 @@ public class Route {
 
     private String name;
     private double distance;
+    /**
+     * The rowID of this route in the RouteList table (_id column).
+     */
+    private long rowID;
 
-    private Session currentSession;
-    private Session PBSession;
     private List<Split> bestIndividualSplits;
 
-    public Route(String name, Session session) {
+    public Route(String name) {
         this.name = name;
-        this.currentSession = session;
-    }
 
-    public Session getCurrentSession() {
-        return currentSession;
-    }
-
-    public Session getPBSession() {
-        return null;
+        rowID = -1;
     }
 
     public List<Split> getBestIndividualSplits() {
@@ -39,5 +34,9 @@ public class Route {
 
     public double getDistance() {
         return distance;
+    }
+
+    public long getRowID() {
+        return rowID;
     }
 }

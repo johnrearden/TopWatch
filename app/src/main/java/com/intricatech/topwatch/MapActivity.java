@@ -31,6 +31,8 @@ public class MapActivity extends AppCompatActivity
                          implements OnMapReadyCallback {
 
     private static String TAG;
+    private static final float DEFAULT_ZOOM = 17.0f;
+
     private GoogleMap map;
     private LocationRecordServer locationTrackerService;
     private boolean locationServiceBound;
@@ -57,10 +59,14 @@ public class MapActivity extends AppCompatActivity
         }
 
         @Override
-        public void updateMap(PolylineOptions options, LatLng latLng) {
+        public void updateMapWithPolyline(PolylineOptions options) {
             map.clear();
             map.addPolyline(options);
-            map.animateCamera(CameraUpdateFactory.newLatLng(latLng));
+        }
+
+        @Override
+        public void updateMapWithLocationOnly(LatLng latLng) {
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
         }
     };
 
@@ -99,10 +105,8 @@ public class MapActivity extends AppCompatActivity
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        Intent startIntent = new Intent(this, LocationTrackerService.class);
-        startService(startIntent);
-
-
+        /*Intent startIntent = new Intent(this, LocationTrackerService.class);
+        startService(startIntent);*/
     }
 
     @Override
@@ -124,6 +128,7 @@ public class MapActivity extends AppCompatActivity
     @Override
     public void onMapReady(GoogleMap googleMap) {
         this.map = googleMap;
+        Log.d(TAG, "onMapReady() callback invoked");
 
         try {
             boolean success = map.setMapStyle(MapStyleOptions.loadRawResourceStyle(this, R.raw.style_json));
@@ -139,6 +144,6 @@ public class MapActivity extends AppCompatActivity
             map.setMyLocationEnabled(true);
         }
         map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
-        map.animateCamera(CameraUpdateFactory.zoomTo(17.0f));
+        map.animateCamera(CameraUpdateFactory.zoomTo(DEFAULT_ZOOM));
     }
 }

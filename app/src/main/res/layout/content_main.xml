@@ -52,21 +52,6 @@
         android:id="@+id/location_service_layout"
         android:layout_below="@+id/time_since_last_split"
         >
-
-        <Button
-            android:id="@+id/button2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:onClick="onStopServiceButtonPressed"
-            android:text="Stop Service"
-            android:visibility="visible"/>
-        <Button
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:onClick="onPromptServiceForLocationPressed"
-            android:text="Get Loc"
-            android:visibility="gone"
-            />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -135,7 +120,7 @@
         <Button
             android:layout_width="80dp"
             android:layout_height="80dp"
-            android:id="@+id/stop_button"
+            android:id="@+id/reset_button"
             android:gravity="center"
             android:scaleType="fitXY"
             android:background="@drawable/round_black_button"

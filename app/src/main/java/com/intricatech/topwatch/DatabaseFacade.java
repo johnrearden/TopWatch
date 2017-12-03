@@ -7,7 +7,10 @@ import android.database.sqlite.SQLiteDatabase;
 import android.location.Location;
 import android.util.Log;
 
+import com.google.android.gms.maps.model.LatLng;
+
 import java.util.ArrayList;
+import java.util.List;
 
 import static com.intricatech.topwatch.DBContract.LocationRecords;
 import static com.intricatech.topwatch.DBContract.RouteInfo;
@@ -37,18 +40,19 @@ public class DatabaseFacade {
     private DatabaseFacade(Context context) {
         helper = new DBHelper(context);
         database = helper.getWritableDatabase();
+        //database.enableWriteAheadLogging();
     }
 
     public void saveNewRouteToDB(String routeName, Session session, double distance) {
 
         int numberOfSplits = session.getSplitList().size();
 
-        String splitDistances = null;
-        if (session.getSplitDistances().size() > 0) {
+        String splitDistances;
+        if (numberOfSplits > 0) {
             StringBuilder sb = new StringBuilder();
-            sb.append(session.getSplitDistances().get(0));
+            sb.append(session.getSplitList().get(0).getDistance());
             for (int i = 1; i < numberOfSplits; i++) {
-                sb.append("," + String.valueOf(session.getSplitDistances().get(i)));
+                sb.append("," + String.valueOf(session.getSplitList().get(i).getDistance()));
             }
             splitDistances = sb.toString();
         } else {
@@ -65,17 +69,18 @@ public class DatabaseFacade {
         values.put(RouteList.COLUMN_NAME_DISTANCE, distance);
         values.put(RouteList.COLUMN_NAME_SPLIT_DISTANCES, splitDistances);
 
-        database.insert(RouteList.TABLE_NAME, null, values);
+        long rowID = database.insert(RouteList.TABLE_NAME, null, values);
 
         // Create a new table for this new route.
-        database.execSQL(RouteInfo.getCreateRouteDataTableString(routeName, numberOfSplits));
+        database.execSQL(RouteInfo.getCreateRouteDataTableString(rowID, numberOfSplits));
 
-        saveSessionToDB(routeName, session);
+        saveSessionToDB(rowID, session);
 
-        getArrayListOfRoutes();
+        logAllDatabaseTables();
+
     }
 
-    public void saveSessionToDB(String routeName, Session session){
+    public void saveSessionToDB(long rowID, Session session){
 
         Log.d(TAG, "Session to save to database : " + session.toString());
         int numberOfSplits = session.getSplitList().size();
@@ -91,16 +96,17 @@ public class DatabaseFacade {
 
         Log.d(TAG, "Content values = \n" + values.toString());
 
-        database.insert(RouteInfo.TABLE_NAME_PREFIX + routeName, null, values);
+        database.insert(RouteInfo.getRouteDataTableName(rowID), null, values);
     }
 
-    public Session getSessionsFromDB(String routeName) {
+    public Session getSessionsFromDB(long rowID) {
 
         Session session = new Session();
 
         // Get number of splits in this route.
         String rawQueryString = "SELECT " + RouteList.COLUMN_NAME_NUMBER_OF_SPLITS + " FROM "
-                + RouteList.TABLE_NAME + " WHERE COLUMN = " + routeName;
+                + RouteList.TABLE_NAME + " WHERE COLUMN = "
+                + RouteInfo.getRouteDataTableName(rowID);
         Cursor cursor = database.rawQuery(rawQueryString, null);
         cursor.moveToFirst();
         int numberOfSplits = cursor.getInt(0);
@@ -115,46 +121,6 @@ public class DatabaseFacade {
         }
 
         return session;
-    }
-
-    public ArrayList<String> getArrayListOfRoutes() {
-
-        String[] projection = {
-                RouteList.COLUMN_NAME_NAME,
-                RouteList.COLUMN_NAME_DISTANCE
-        };
-        String sortOrder = RouteList.COLUMN_NAME_DISTANCE + " DESC";
-
-        Cursor cursor = database.query(
-                RouteList.TABLE_NAME,
-                projection,
-                null,
-                null,
-                null,
-                null,
-                sortOrder
-        );
-        Log.d(TAG, "cursor.getCount() returns " + cursor.getCount());
-
-        ArrayList<String> resultList = new ArrayList<>();
-        while (cursor.moveToNext()) {
-            String aName = cursor.getString(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_NAME));
-            double dist = cursor.getDouble(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_DISTANCE));
-            String aDist = String.format("%.2f", dist);
-            String aResult = aName + ", " + dist + "m";
-            resultList.add(aResult);
-            Log.d(TAG, "Route : " + aResult);
-        }
-
-        return resultList;
-
-        /*while (cursor.moveToNext()) {
-            String name = cursor.getString(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_NAME));
-            double distance = cursor.getDouble(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_DISTANCE));
-            Log.d(TAG, "Name == " + name + ", dist : " + String.valueOf(distance));
-        }
-
-        return null;*/
     }
 
     public Cursor getRouteListCursor() {
@@ -190,12 +156,29 @@ public class DatabaseFacade {
         return null;
     }
 
-    public void createNewCurrentSessionTable() {
-        database.execSQL(LocationRecords.getCreateCurrentSessionTableString());
+    public void deleteRoute(long rowID) {
+
+        // Delete this entry from the RouteList table.
+        String where = RouteList.COLUMN_NAME_ID + " = ?";
+        String[] whereArgs = {String.valueOf(rowID)};
+        database.delete(RouteList.TABLE_NAME, where, whereArgs);
+
+        // Delete its corresponding RouteInfo table.
+        String execSQLString = DBContract.RouteInfo.getDeleteRouteInfoString(rowID);
+        database.execSQL(execSQLString);
+
+        logAllDatabaseTables();
     }
 
-    public void deleteCurrentSessionTable() {
-        database.execSQL(LocationRecords.getDeleteCurrentSessionTableString());
+    public void createNewCurrentSessionTable() {
+        //database.execSQL(LocationRecords.getDeleteCurrentSessionTableString());
+        database.execSQL(LocationRecords.getCreateCurrentSessionTableString());
+        Log.d(TAG, "new session table created");
+    }
+
+    public void clearCurrentSessionTable() {
+        database.execSQL(LocationRecords.getClearCurrentSessionTableString());
+        Log.d(TAG, "current session table cleared");
     }
 
     public void copyCurrentSessionToPBSession(String routeName) {
@@ -208,6 +191,7 @@ public class DatabaseFacade {
         values.put(LocationRecords.COL_LATITUDE, location.getLatitude());
         values.put(LocationRecords.COL_LONGITUDE, location.getLongitude());
         values.put(LocationRecords.COL_ELEVATION, location.getAltitude());
+        values.put(LocationRecords.COL_ACCURACY, location.getAccuracy());
         values.put(LocationRecords.COL_PARENT_SPLIT, splitIndex);
 
         database.insert(
@@ -215,6 +199,58 @@ public class DatabaseFacade {
                 null,
                 values
         );
+        Log.d(TAG, "location record committed to current session table");
+    }
+
+    public List<LatLng> getAllLocationsFromCurrentSession() {
+        List<LatLng> locs = new ArrayList<>();
+        String[] projection = new String[]{
+                LocationRecords.COL_LATITUDE,
+                LocationRecords.COL_LONGITUDE};
+        String sortOrder = LocationRecords.COL_TIMESTAMP + " ASC";
+        Cursor cursor = database.query(
+                LocationRecords.CURRENT_SESSION_TABLE_NAME,
+                projection,
+                null,
+                null,
+                null,
+                null,
+                sortOrder
+        );
+        while (cursor.moveToNext()){
+            locs.add(new LatLng(
+                    cursor.getDouble(cursor.getColumnIndexOrThrow(LocationRecords.COL_LATITUDE)),
+                    cursor.getDouble(cursor.getColumnIndexOrThrow(LocationRecords.COL_LONGITUDE))
+            ));
+        }
+        return locs;
+    }
+
+    public void logAllDatabaseTables() {
+        Cursor c = database.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null);
+        Log.d(TAG, "Existing tables :");
+        if (c.moveToFirst()) {
+            while ( !c.isAfterLast() ) {
+                Log.d(TAG, "... table : " + c.getString(0));
+                c.moveToNext();
+            }
+        }
+    }
+
+    public long getPBTimeForRoute(long rowID) {
+        List<Long> times = new ArrayList<>();
+        String[] projection = {RouteInfo.COLUMN_NAME_TOTAL_TIME};
+        Cursor cursor = database.query(
+                RouteInfo.getRouteDataTableName(rowID),
+                projection,
+                null, null, null, null,
+                RouteInfo.COLUMN_NAME_TOTAL_TIME + " DESC"
+        );
+        if (cursor.moveToFirst()) {
+            return cursor.getLong(cursor.getColumnIndexOrThrow(RouteInfo.COLUMN_NAME_TOTAL_TIME));
+        } else {
+            return 0;
+        }
     }
 
 }

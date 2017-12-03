@@ -17,5 +17,7 @@ public interface LocationRecordClient {
 
     void setAccuracy(double accuracy);
 
-    void updateMap(PolylineOptions options, LatLng latLng);
+    void updateMapWithPolyline(PolylineOptions options);
+
+    void updateMapWithLocationOnly(LatLng latLng);
 }

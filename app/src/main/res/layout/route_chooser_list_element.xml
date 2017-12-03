@@ -1,44 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
-<GridLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:columnCount="3"
-    android:rowCount="1"
-    android:background="@android:drawable/alert_light_frame"
+    android:weightSum="9.3"
     android:paddingBottom="5dp"
     android:paddingTop="5dp"
+    android:descendantFocusability="blocksDescendants"
     >
 
     <TextView
         android:id="@+id/route_name"
-        android:layout_column="0"
-        android:layout_columnWeight="3"
-        android:layout_gravity="fill_horizontal"
-        android:layout_row="0"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="6"
+        android:layout_gravity="center_vertical"
         android:elevation="10dp"
-        android:text="Namw"
+        android:text="Name"
         android:textAppearance="@android:style/TextAppearance.DeviceDefault.Medium"
         android:textColor="#000000"
-        android:padding="5dp"/>
+        android:background="@drawable/common_rounded_background"
+        android:padding="5dp"
+        android:lines="1"/>
+    <android.support.v4.widget.Space
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.1"/>
     <TextView
-        android:layout_gravity="fill_horizontal"
+        android:layout_gravity="center_vertical"
         android:id="@+id/route_distance"
-        android:layout_row="0"
-        android:layout_column="1"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
         android:text="Distance"
         android:textAlignment="center"
         android:textAppearance="@android:style/TextAppearance.DeviceDefault.Medium"
         android:textColor="#000000"
-        android:padding="5dp"/>
+        android:background="@drawable/common_rounded_background"
+        android:elevation="10dp"
+        android:padding="5dp"
+        android:lines="1"/>
+    <android.support.v4.widget.Space
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.1"/>
     <TextView
-        android:layout_gravity="fill_horizontal"
+        android:layout_gravity="center_vertical"
         android:id="@+id/route_number_of_splits"
-        android:layout_row="0"
-        android:layout_column="2"
-        android:text="# splits"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="# Splits"
         android:textAlignment="center"
         android:textAppearance="@android:style/TextAppearance.DeviceDefault.Medium"
         android:textColor="#000000"
-        android:padding="5dp"/>
+        android:background="@drawable/common_rounded_background"
+        android:elevation="10dp"
+        android:padding="5dp"
+        android:lines="1"/>
+    <android.support.v4.widget.Space
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.1"/>
+    <ImageButton
+        android:id="@+id/route_delete_button"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_gravity="center_vertical"
+        android:src="@drawable/ic_delete_black_24dp"
+        android:background="@drawable/common_rounded_background"
+        android:scaleType="centerInside"
+        android:visibility="gone"/>
 
-</GridLayout>
+</LinearLayout>

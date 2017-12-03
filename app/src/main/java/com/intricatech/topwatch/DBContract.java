@@ -49,9 +49,9 @@ public class DBContract {
         public static final String COLUMN_NAME_SPLIT_TAG = "split_";
         public static final String TABLE_NAME_PREFIX = "route_";
 
-        public static String getCreateRouteDataTableString (String routeName, int numberOfSplits) {
+        public static String getCreateRouteDataTableString (long routeListRowID, int numberOfSplits) {
 
-            tableName = TABLE_NAME_PREFIX + routeName;
+            tableName = getRouteDataTableName(routeListRowID);
 
             StringBuilder sb = new StringBuilder();
             sb.append("CREATE TABLE "
@@ -70,15 +70,19 @@ public class DBContract {
             return str;
         }
 
-        public static String getDeleteRouteInfoString(int tableID) {
+        public static String getDeleteRouteInfoString(long routeListRowID) {
 
-            tableName = "route_" + String.valueOf(tableID);
+            tableName = getRouteDataTableName(routeListRowID);
 
             final String SQL_DELETE_ROUTE_INFO_TABLE =
                     "DROP TABLE IF EXISTS " + tableName;
 
             return SQL_DELETE_ROUTE_INFO_TABLE;
 
+        }
+
+        public static String getRouteDataTableName(long routeListRowID) {
+            return TABLE_NAME_PREFIX + routeListRowID;
         }
     }
 
@@ -91,6 +95,7 @@ public class DBContract {
         public static final String COL_LATITUDE = "latitude";
         public static final String COL_LONGITUDE = "longitude";
         public static final String COL_ELEVATION = "elevation";
+        public static final String COL_ACCURACY = "accuracy";
         public static final String COL_PARENT_SPLIT = "parent_split";
 
         public static final String CURRENT_SESSION_TABLE_NAME = "current_session";
@@ -100,47 +105,52 @@ public class DBContract {
             tableName =  routeName + PERSONAL_BEST_SESSION_SUFFEX;
             StringBuilder sb = new StringBuilder();
             sb.append("CREATE TABLE "
-                + tableName + " ("
-                + COL_ID + " INTEGER PRIMARY KEY,"
-                + COL_TIMESTAMP + " INTEGER,"
-                + COL_LATITUDE + " REAL,"
-                + COL_LONGITUDE + " REAL,"
-                + COL_ELEVATION + " REAL,"
-                + COL_PARENT_SPLIT + " INTEGER"
-                + ")");
-            return sb.toString();
-        }
-
-        public static String getCreateCurrentSessionTableString () {
-            tableName =  CURRENT_SESSION_TABLE_NAME;
-            StringBuilder sb = new StringBuilder();
-            sb.append("CREATE TABLE "
                     + tableName + " ("
                     + COL_ID + " INTEGER PRIMARY KEY,"
                     + COL_TIMESTAMP + " INTEGER,"
                     + COL_LATITUDE + " REAL,"
                     + COL_LONGITUDE + " REAL,"
                     + COL_ELEVATION + " REAL,"
+                    + COL_ACCURACY + " REAL,"
                     + COL_PARENT_SPLIT + " INTEGER"
                     + ")");
             return sb.toString();
         }
 
-        public static String getDeletePBSessionTableString (String routeName) {
-            tableName =  routeName + PERSONAL_BEST_SESSION_SUFFEX;
-            final String SQL_DELETE_PB_SESSION_TABLE =
-                    "DROP TABLE IF EXISTS " + tableName;
-            return SQL_DELETE_PB_SESSION_TABLE;
-        }
-
-        public static String getDeleteCurrentSessionTableString () {
+        public static String getCreateCurrentSessionTableString () {
             tableName =  CURRENT_SESSION_TABLE_NAME;
-            final String SQL_DELETE_CURRENT_SESSION_TABLE =
-                    "DROP TABLE IF EXISTS " + tableName;
-            return SQL_DELETE_CURRENT_SESSION_TABLE;
+            StringBuilder sb = new StringBuilder();
+            sb.append("CREATE TABLE IF NOT EXISTS "
+                    + tableName + " ("
+                    + COL_ID + " INTEGER PRIMARY KEY,"
+                    + COL_TIMESTAMP + " INTEGER,"
+                    + COL_LATITUDE + " REAL,"
+                    + COL_LONGITUDE + " REAL,"
+                    + COL_ELEVATION + " REAL,"
+                    + COL_ACCURACY + " REAL,"
+                    + COL_PARENT_SPLIT + " INTEGER"
+                    + ")");
+            return sb.toString();
+        }
+
+        public static String getClearPBSessionTableString (String routeName) {
+            tableName =  routeName + PERSONAL_BEST_SESSION_SUFFEX;
+            final String SQL_CLEAR_PB_SESSION_TABLE =
+                    "DELETE * FROM " + tableName;
+            return SQL_CLEAR_PB_SESSION_TABLE;
         }
 
 
+        public static String getClearCurrentSessionTableString() {
+            tableName = CURRENT_SESSION_TABLE_NAME;
+            String SQL_CLEAR_CURRENT_SESSION_TABLE =
+                    "DELETE FROM " + tableName;
+            return SQL_CLEAR_CURRENT_SESSION_TABLE;
+        }
+
+        public static String getDeleteCurrentSessionTableString() {
+            return "DROP TABLE IF EXISTS " + CURRENT_SESSION_TABLE_NAME;
+        }
 
     }
 

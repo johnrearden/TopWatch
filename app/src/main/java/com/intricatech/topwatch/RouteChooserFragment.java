@@ -10,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.ImageButton;
 import android.widget.SimpleCursorAdapter;
 
 import static com.intricatech.topwatch.DBContract.RouteList;
@@ -24,6 +25,9 @@ public class RouteChooserFragment extends ListFragment
     private static String TAG;
     private OnRouteChosenListener routeChosenListener;
     private Cursor cursor;
+    private ImageButton routeDeleteButton;
+    private int indexToDelete;
+    private SimpleCursorAdapter simpleCursorAdapter;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -53,6 +57,7 @@ public class RouteChooserFragment extends ListFragment
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
         Log.d(TAG, "onActivityCreated() invoked");
+        getActivity().setTitle("Choose a route.");
 
         cursor = DatabaseFacade.getInstance(getActivity()).getRouteListCursor();
         String[] cols = new String[]{
@@ -65,7 +70,7 @@ public class RouteChooserFragment extends ListFragment
                 R.id.route_number_of_splits
         };
         Log.d(TAG, cursor.toString());
-        SimpleCursorAdapter simpleCursorAdapter = new SimpleCursorAdapter(
+        simpleCursorAdapter = new SimpleCursorAdapter(
                 getActivity(),
                 R.layout.route_chooser_list_element,
                 cursor,
@@ -88,8 +93,44 @@ public class RouteChooserFragment extends ListFragment
     @Override
     public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
         Vibrations.getInstance().doLongVibrate();
+
+        routeDeleteButton = (ImageButton) getListView().getChildAt(position).findViewById(R.id.route_delete_button);
+        if (routeDeleteButton.getVisibility() == View.VISIBLE) {
+            routeDeleteButton.setVisibility(View.GONE);
+        } else if (routeDeleteButton.getVisibility() == View.GONE) {
+            routeDeleteButton.setVisibility(View.VISIBLE);
+            routeDeleteButton.setOnClickListener(deleteRouteListener);
+            indexToDelete = position;
+        }
         return true;
     }
+
+    private View.OnClickListener deleteRouteListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            Log.d(TAG, "delete this fucking view man");
+            // Confirm user action.
+            UserUtilities.getGenericUserConfirmation(getContext(), new UserUtilities.UserConfirmationCallback() {
+                @Override
+                public void onUserConfirms() {
+                    deleteRouteAndDataTable(indexToDelete);
+                }
+
+                @Override
+                public void onUserDenies() {}
+            });
+        }
+    };
+
+    private void deleteRouteAndDataTable(int indexToDelete) {
+        cursor.moveToPosition(indexToDelete);
+        long rowId = cursor.getLong(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_ID));
+        DatabaseFacade.getInstance(getContext()).deleteRoute(rowId);
+        cursor = DatabaseFacade.getInstance(getContext()).getRouteListCursor();
+        simpleCursorAdapter.changeCursor(cursor);
+        simpleCursorAdapter.notifyDataSetChanged();
+    }
+
 }
 
 interface OnRouteChosenListener {

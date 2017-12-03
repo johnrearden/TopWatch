@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.style.RelativeSizeSpan;
+import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -68,6 +69,8 @@ public class StopWatch {
      * The elapsed time since the start of the current split.
      */
     private long currentSplitElapsedTime;
+
+    private double totalDistance;
 
     /**
      * The time the current split last restarted at.
@@ -161,7 +164,7 @@ public class StopWatch {
      * Add the current session to the current Route in the database.
      */
     public void saveNewSessionToDB() {
-        databaseFacade.saveSessionToDB(route.getName(), session);
+        databaseFacade.saveSessionToDB(route.getRowID(), session);
     }
 
     /**
@@ -219,9 +222,18 @@ public class StopWatch {
     public void createSplit() {
         long currentTime = getCurrentTime();
         long nanos = currentSplitElapsedTime + currentTime - currentSplitLastStartTime;
-        Split split = new Split(nanos, session.getSplitList().size());
+        double dist = calculateDistanceForCurrentSplit();
+        Split split = new Split(nanos, dist, session.getSplitList().size());
         session.getSplitList().add(split);
         callbackActivity.onNewSplitCreated(getMostRecentSplitAsString());
+    }
+
+    private double calculateDistanceForCurrentSplit() {
+        double distForAllPreviousSplits = 0;
+        for (Split split : session.getSplitList()) {
+            distForAllPreviousSplits += split.getDistance();
+        }
+        return totalDistance - distForAllPreviousSplits;
     }
 
     public SpannableString getTotalTimeAsString() {
@@ -263,11 +275,13 @@ public class StopWatch {
         if (!session.getSplitList().isEmpty()) {
             Split spl = session.getSplitList().getLast();
             long splitTime = spl.getSplitTime();
+            double distance = spl.getDistance();
             int index = spl.getIndex();
 
             String indexString = String.format("%02d", index);
             String timeString = getTimeAsString(splitTime);
-            String fullString = indexString + COLON_SEPARATOR + timeString;
+            String distanceString = "  " + String.format("%.1f", distance) + "m";
+            String fullString = indexString + COLON_SEPARATOR + timeString + distanceString;
 
             SpannableString spStr = new SpannableString(fullString);
             spStr.setSpan(
@@ -373,6 +387,7 @@ public class StopWatch {
         sharedPreferencesEditor.putBoolean(IS_RUNNING, isRunning);
         sharedPreferencesEditor.putInt(RECORDING_TYPE, recordingType.ordinal());
         sharedPreferencesEditor.putBoolean(NEW_SESSION_READY_TO_START, newSessionReadyToStart);
+        Log.d(TAG, "saving stopwatch to SharedPrefs : newSessionReadyToStart = " + newSessionReadyToStart);
 
         sharedPreferencesEditor.commit();
     }
@@ -396,6 +411,7 @@ public class StopWatch {
         isRunning = sharedPreferences.getBoolean(IS_RUNNING, false);
         recordingType = RecordingType.values()[sharedPreferences.getInt(RECORDING_TYPE, 0)];
         newSessionReadyToStart = sharedPreferences.getBoolean(NEW_SESSION_READY_TO_START, true);
+        Log.d(TAG, "loading stopwatch from SharedPrefs : newSessionReadyToStart = " + newSessionReadyToStart);
     }
     
     private long getCurrentTime() {
@@ -420,5 +436,13 @@ public class StopWatch {
 
     public RecordingType getRecordingType() {
         return recordingType;
+    }
+
+    public double getTotalDistance() {
+        return totalDistance;
+    }
+
+    public void setTotalDistance(double totalDistance) {
+        this.totalDistance = totalDistance;
     }
 }

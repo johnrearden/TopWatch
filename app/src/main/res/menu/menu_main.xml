@@ -18,5 +18,10 @@
         android:orderInCategory="60"
         android:title="Display Map"
         app:showAsAction="never"></item>
+    <item
+        android:id="@+id/action_design_new_route"
+        android:orderInCategory="70"
+        android:title="Design New Route"
+        app:showAsAction="never"></item>
 
 </menu>

@@ -8,7 +8,6 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -37,7 +36,6 @@ import android.widget.Toast;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.PolylineOptions;
 
-import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -58,8 +56,6 @@ public class MainActivity extends AppCompatActivity
 
     private LocationManager locationManager;
     private Vibrations vibrations;
-    private LocationListener locationListener;
-    private DecimalFormat locationFormatter = new DecimalFormat("###.###");
 
     private StopWatch stopWatch;
     private DatabaseFacade databaseFacade;
@@ -76,7 +72,6 @@ public class MainActivity extends AppCompatActivity
     private TextView totalDistanceTV, accuracyTV;
 
     private boolean locationPermissionGranted;
-    private boolean sessionReadyToStart;
     private List<OnDestroyObserver> observers;
 
     private LocationRecordServer locationService = null;
@@ -89,8 +84,9 @@ public class MainActivity extends AppCompatActivity
 
         @Override
         public void setTotalDistance(double totalDistanceTravelled) {
+            stopWatch.setTotalDistance(totalDistanceTravelled);
             totalDistanceTV.setText(
-                    String.format("%.2f", totalDistanceTravelled)
+                    String.format("%.2f", stopWatch.getTotalDistance())
             );
         }
 
@@ -107,7 +103,12 @@ public class MainActivity extends AppCompatActivity
         }
 
         @Override
-        public void updateMap(PolylineOptions options, LatLng latLng) {
+        public void updateMapWithPolyline(PolylineOptions options) {
+            // NOT USED BY MAIN ACTIVITY.
+        }
+
+        @Override
+        public void updateMapWithLocationOnly(LatLng latLng) {
             // NOT USED BY MAIN ACTIVITY.
         }
     };
@@ -133,17 +134,12 @@ public class MainActivity extends AppCompatActivity
 
         super.onCreate(savedInstanceState);
 
-        Intent startIntent = new Intent(this, LocationTrackerService.class);
-        startService(startIntent);
-
         Vibrations.initialize(getApplicationContext());
         vibrations = Vibrations.getInstance();
 
         TAG = getClass().getSimpleName();
         Log.d(TAG, "onCreate() invoked");
         setContentView(R.layout.activity_main);
-        //Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        //setSupportActionBar(toolbar);
         toolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(toolbar);
 
@@ -162,25 +158,22 @@ public class MainActivity extends AppCompatActivity
 
         mainTimerTV = (TextView) findViewById(R.id.main_time_readout);
         mainTimerTV.setText(StopWatch.getTimeAsSpannableString(0));
-
         timeSinceLastSplitTV = (TextView) findViewById(R.id.time_since_last_split);
         timeSinceLastSplitTV.setText(StopWatch.getTimeAsSpannableString(0));
-
         totalDistanceTV = (TextView) findViewById(R.id.total_dist_travelled);
         accuracyTV = (TextView) findViewById(R.id.accuracy);
-
         splitLayout = (LinearLayout) findViewById(R.id.split_times_linearlayout);
         routeChooserLayout = (FrameLayout) findViewById(R.id.route_chooser_layout);
-
         playButton = (ImageButton) findViewById(R.id.play_pause_button);
-        resetButton = (Button) findViewById(R.id.stop_button);
+        resetButton = (Button) findViewById(R.id.reset_button);
         resetButton.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
                 stopWatch.onResetButtonPressed();
                 splitLayout.removeAllViews();
                 playButton.setImageResource(R.drawable.play_icon_stopwatch);
-                locationService.finishSessionAndDelete();
+                locationService.resetSession();
+                totalDistanceTV.setText("0.00");
                 return true;
             }
         });
@@ -197,12 +190,10 @@ public class MainActivity extends AppCompatActivity
         Log.d(TAG, "onStart() invoked");
 
         stopWatch.loadSharedPreferencesOnStart();
-        if (stopWatch.isNewSessionReadyToStart()) {
-            sessionReadyToStart = true;
-        }
-
         locationPermissionGranted = checkForLocationPermission();
-        if (!locationPermissionGranted) {
+        if (locationPermissionGranted) {
+            startLocationServiceIfNotStarted();
+        } else {
             requestPermissionIfAppropriate();
         }
     }
@@ -211,6 +202,7 @@ public class MainActivity extends AppCompatActivity
     public void onResume() {
         super.onResume();
         Log.d(TAG, "onResume() invoked");
+        setTitle("TopWatch");
         timer = new Timer();
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -251,7 +243,16 @@ public class MainActivity extends AppCompatActivity
         if (locationServiceBound) {
             unbindService(serviceConnection);
         }
+        if (stopWatch.isNewSessionReadyToStart()) {
+            Log.d(TAG, "******Session is inactive ... stopping service");
+            stopLocationService();
+        }
         locationServiceBound = false;
+    }
+
+    private void stopLocationService() {
+        Intent intent = new Intent(this, LocationTrackerService.class);
+        stopService(intent);
     }
 
     @Override
@@ -319,9 +320,7 @@ public class MainActivity extends AppCompatActivity
             case FINE_LOCATION_REQUEST_CODE : {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     locationPermissionGranted = true;
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-                            PackageManager.PERMISSION_GRANTED){
-                        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 1, locationListener);}
+                    startLocationServiceIfNotStarted();
                 } else {
                     locationPermissionGranted = false;
                 }
@@ -336,23 +335,35 @@ public class MainActivity extends AppCompatActivity
      * @param view
      */
     public void onPlayButtonPressed(View view) {
-        stopWatch.onPlayButtonPressed();
-        vibrations.doLongVibrate();
-        if (!stopWatch.isRunning()) {
-            playButton.setImageResource(R.drawable.play_icon_stopwatch);
-            setResetButtonEnabled(true);
-            setLapButtonText(false);
+
+        // Inform the LocationService of the change in the state of the StopWatch.
+        if (stopWatch.isRunning()) {
             locationService.pauseSession();
         } else {
-            playButton.setImageResource(R.drawable.pause_icon_stopwatch);
-            setResetButtonEnabled(false);
-            setLapButtonText(true);
-
-            if (sessionReadyToStart) {
+            if (stopWatch.isNewSessionReadyToStart()) {
                 locationService.startSession();
             } else {
                 locationService.restartSession();
             }
+        }
+
+        // Instruct the StopWatch to toggle state.
+        stopWatch.onPlayButtonPressed();
+        vibrations.doLongVibrate();
+
+        // Update the buttons to reflect the new StopWatch state.
+        updateControlGUI(stopWatch.isRunning());
+    }
+
+    private void updateControlGUI(boolean stopWatchIsRunning) {
+        if (stopWatchIsRunning) {
+            playButton.setImageResource(R.drawable.pause_icon_stopwatch);
+            setResetButtonEnabled(false);
+            setLapButtonText(true);
+        } else {
+            playButton.setImageResource(R.drawable.play_icon_stopwatch);
+            setResetButtonEnabled(true);
+            setLapButtonText(false);
         }
     }
 
@@ -409,8 +420,7 @@ public class MainActivity extends AppCompatActivity
         } else {
             switch (stopWatch.getRecordingType()) {
                 case NEW_RECORDING:
-                    String routeName = promptUserForRouteName();
-                    //stopWatch.saveNewRouteToDB(routeName);
+                    promptUserForRouteName(); // calls back to onRouteNameEntered.
                     break;
                 case EXISTING_ROUTE:
                     stopWatch.saveNewSessionToDB();
@@ -421,7 +431,6 @@ public class MainActivity extends AppCompatActivity
 
     private void onRouteNameEntered(String routeName) {
         stopWatch.saveNewRouteToDB(routeName);
-        locationService.finishSessionAndCommit(routeName);
     }
 
     public void onRouteNameTVPressed(View view) {
@@ -493,10 +502,11 @@ public class MainActivity extends AppCompatActivity
             case R.id.action_settings:
                 return true;
             case R.id.action_show_map:
-                Log.d(TAG, "action_show_maps selected");
                 Intent intent = new Intent(this, MapActivity.class);
                 startActivity(intent);
                 break;
+            case R.id.action_design_new_route:
+
         }
 
         return super.onOptionsItemSelected(item);
@@ -532,14 +542,12 @@ public class MainActivity extends AppCompatActivity
     }
 
     public void onStopServiceButtonPressed(View view) {
-        unbindService(serviceConnection);
-        locationServiceBound = false;
-        Intent intent = new Intent(this, LocationTrackerService.class);
-        stopService(intent);
+        stopLocationService();
     }
 
-    public void onPromptServiceForLocationPressed(View view) {
-        Log.d(TAG, locationService.requestNewLocationRecord().toString());
+    private void startLocationServiceIfNotStarted() {
+        Intent startIntent = new Intent(this, LocationTrackerService.class);
+        startService(startIntent);
     }
 
 }

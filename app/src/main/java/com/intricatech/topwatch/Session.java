@@ -10,14 +10,12 @@ import java.util.LinkedList;
 public class Session {
 
     private LinkedList<Split> splitList;
-    private LinkedList<Double> splitDistances;
     private Date date;
 
     public Session(Date date) {
 
         this.date = date;
         splitList = new LinkedList<>();
-        splitDistances = new LinkedList<>();
     }
 
     public Session() {
@@ -34,10 +32,6 @@ public class Session {
 
     public LinkedList<Split> getSplitList() {
         return splitList;
-    }
-
-    public LinkedList<Double> getSplitDistances() {
-        return splitDistances;
     }
 
     public Date getDate() {

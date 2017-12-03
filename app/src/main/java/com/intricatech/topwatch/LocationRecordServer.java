@@ -12,8 +12,6 @@ public interface LocationRecordServer {
 
     void unregisterActivity(Activity activity);
 
-    LocationRecord requestNewLocationRecord();
-
     void startSession();
 
     void pauseSession();
@@ -22,8 +20,6 @@ public interface LocationRecordServer {
 
     void newSplitStarted();
 
-    void finishSessionAndCommit(String routeName);
-
-    void finishSessionAndDelete();
+    void resetSession();
 
 }

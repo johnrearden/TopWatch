@@ -13,15 +13,12 @@ public final class Split {
     /**
      * The distance for this split, in meters.
      */
-    private float distance;
+    private double distance;
 
     /**
      * The index of this split, also the order of creation.
      */
     private final int index;
-
-    private GPSCoords startCoords, finishCoords;
-
 
     /**
      *
@@ -29,39 +26,25 @@ public final class Split {
      * @param index
      */
     public Split(long nanos, int index) {
-        this(nanos, index, null, null);
+        this(nanos, 0, index);
     }
 
-    public Split(long nanos, int index, GPSCoords start, GPSCoords finish) {
+    public Split(long nanos, double distance, int index) {
         this.splitTime = nanos;
+        this.distance = distance;
         this.index = index;
-        this.startCoords = start;
-        this.finishCoords = finish;
-        if (start != null && finish != null) {
-            distance = GPSCoords.getDistanceInMeters(startCoords, finishCoords);
-        } else {
-            distance = 0;
-        }
-    }
-
-    /**
-     * Sets the GPSCoords for this split (in the event that location services were unavailable at
-     * the time of recording) and calculates the distance between them in meters.
-     * @param start
-     * @param finish
-     */
-    public void setGPSCoords(GPSCoords start, GPSCoords finish) {
-        this.startCoords = start;
-        this.finishCoords = finish;
-        distance = GPSCoords.getDistanceInMeters(startCoords, finishCoords);
     }
 
     public long getSplitTime() {
         return splitTime;
     }
 
-    public float getDistance() {
+    public double getDistance() {
         return distance;
+    }
+
+    public void setDistance(double dist) {
+        this.distance = dist;
     }
 
     public int getIndex() {

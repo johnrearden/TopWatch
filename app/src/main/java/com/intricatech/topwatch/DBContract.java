@@ -3,6 +3,9 @@ package com.intricatech.topwatch;
 import android.provider.BaseColumns;
 import android.util.Log;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Created by Bolgbolg on 20/09/2017.
  */
@@ -32,11 +35,53 @@ public class DBContract {
                 + RouteList.COLUMN_NAME_NAME + " TEXT NOT NULL, "
                 + RouteList.COLUMN_NAME_NUMBER_OF_SPLITS + " INTEGER, "
                 + RouteList.COLUMN_NAME_DISTANCE + " REAL, "
-                + RouteList.COLUMN_NAME_SPLIT_DISTANCES + " STRING" // stored as csv
+                + RouteList.COLUMN_NAME_SPLIT_DISTANCES + " TEXT" // stored as csv
                 + ")";
 
         public static final String SQL_DELETE_ROUTE_LIST_TABLE =
                 "DROP TABLE IF EXISTS " + TABLE_NAME;
+
+        public static String constructSplitDistancesCSVString(List<Split> splitList) {
+            int size = splitList.size();
+            if (size == 0) {
+                return null;
+            } else {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < size - 1; i++) {
+                    sb.append(String.valueOf(splitList.get(i).getDistance()) + ",");
+                }
+                sb.append(String.valueOf(splitList.get(size - 1).getDistance()) + "*");
+                return sb.toString();
+            }
+        }
+
+        /**
+         * Decodes a given CSV String into an ArrayList<Double>.
+         * Uses null object pattern - creates an empty List and returns it if String is null
+         * or empty.
+         * @param csvString
+         * @return An ArrayList<Double> containing the split distances.
+         */
+        public static List<Double> decodeSplitDistancesCSVString(String csvString) {
+            if (csvString == null || csvString == "") {
+                return new ArrayList<>();
+            } else {
+                List<Double> list = new ArrayList<>();
+                String[] splitDistanceStrings = csvString.split(",");
+                for (String string : splitDistanceStrings) {
+                    if (string.contains("*")) {
+                        String lastString = string.substring(0, string.length() - 1);
+                        Double d = Double.parseDouble(lastString);
+                        list.add(d);
+                    } else {
+                        Double d = Double.parseDouble(string);
+                        list.add(d);
+                    }
+
+                }
+                return list;
+            }
+        }
     }
 
     public static class RouteInfo implements BaseColumns {
@@ -96,13 +141,15 @@ public class DBContract {
         public static final String COL_LONGITUDE = "longitude";
         public static final String COL_ELEVATION = "elevation";
         public static final String COL_ACCURACY = "accuracy";
+        public static final String COL_CUMULATIVE_DISTANCE = "cumulative_distance";
+        public static final String COL_HEARTRATE = "heart_rate";
         public static final String COL_PARENT_SPLIT = "parent_split";
 
         public static final String CURRENT_SESSION_TABLE_NAME = "current_session";
-        public static final String PERSONAL_BEST_SESSION_SUFFEX = "_pb_session";
+        public static final String PERSONAL_BEST_SESSION_PREFIX = "pb_session_";
 
-        public static String getCreatePBSessionTableString (String routeName) {
-            tableName =  routeName + PERSONAL_BEST_SESSION_SUFFEX;
+        public static String getCreatePBSessionTableString (long rowID) {
+            tableName =  getPBSessionTableName(rowID);
             StringBuilder sb = new StringBuilder();
             sb.append("CREATE TABLE "
                     + tableName + " ("
@@ -112,6 +159,8 @@ public class DBContract {
                     + COL_LONGITUDE + " REAL,"
                     + COL_ELEVATION + " REAL,"
                     + COL_ACCURACY + " REAL,"
+                    + COL_CUMULATIVE_DISTANCE + " REAL,"
+                    + COL_HEARTRATE + " INTEGER,"
                     + COL_PARENT_SPLIT + " INTEGER"
                     + ")");
             return sb.toString();
@@ -128,18 +177,23 @@ public class DBContract {
                     + COL_LONGITUDE + " REAL,"
                     + COL_ELEVATION + " REAL,"
                     + COL_ACCURACY + " REAL,"
+                    + COL_CUMULATIVE_DISTANCE + " REAL,"
+                    + COL_HEARTRATE + " INTEGER,"
                     + COL_PARENT_SPLIT + " INTEGER"
                     + ")");
             return sb.toString();
         }
 
-        public static String getClearPBSessionTableString (String routeName) {
-            tableName =  routeName + PERSONAL_BEST_SESSION_SUFFEX;
+        public static String getClearPBSessionTableString (long rowID) {
+            tableName = getPBSessionTableName(rowID);
             final String SQL_CLEAR_PB_SESSION_TABLE =
                     "DELETE * FROM " + tableName;
             return SQL_CLEAR_PB_SESSION_TABLE;
         }
 
+        public static String getPBSessionTableName(long rowID) {
+            return  PERSONAL_BEST_SESSION_PREFIX + String.valueOf(rowID);
+        }
 
         public static String getClearCurrentSessionTableString() {
             tableName = CURRENT_SESSION_TABLE_NAME;
@@ -150,6 +204,15 @@ public class DBContract {
 
         public static String getDeleteCurrentSessionTableString() {
             return "DROP TABLE IF EXISTS " + CURRENT_SESSION_TABLE_NAME;
+        }
+
+        public static String getDeletePBSessionTableString(long rowID) {
+            return "DROP TABLE IF EXISTS " + getPBSessionTableName(rowID);
+        }
+
+        public static String getCopyCurrentToPBSessionTableString(long rowID) {
+            String PBSessionTableName = getPBSessionTableName(rowID);
+            return "INSERT INTO " + PBSessionTableName + " SELECT * FROM " + CURRENT_SESSION_TABLE_NAME;
         }
 
     }

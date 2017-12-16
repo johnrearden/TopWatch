@@ -23,11 +23,19 @@ public class Session {
     }
 
     public double getTotalDistance() {
-        return 0.0d;
+        double cumulativeDistance = 0;
+        for (Split split : splitList) {
+            cumulativeDistance += split.getDistance();
+        }
+        return cumulativeDistance;
     }
 
-    public double getTotalTime() {
-        return 0.0d;
+    public long getTotalTime() {
+        long cumulativeTime = 0;
+        for (Split split : splitList) {
+            cumulativeTime += split.getSplitTime();
+        }
+        return cumulativeTime;
     }
 
     public LinkedList<Split> getSplitList() {

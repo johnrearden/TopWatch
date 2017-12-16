@@ -1,7 +1,6 @@
 package com.intricatech.topwatch;
 
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.PolylineOptions;
+import android.location.Location;
 
 /**
  * Created by Bolgbolg on 17/11/2017.
@@ -9,15 +8,10 @@ import com.google.android.gms.maps.model.PolylineOptions;
 
 public interface LocationRecordClient {
 
-    void setLocationRecord(LocationRecord locationRecord);
-
     void setTotalDistance(double totalDistanceTravelled);
-
-    void setSplitDistance(double splitDistance);
 
     void setAccuracy(double accuracy);
 
-    void updateMapWithPolyline(PolylineOptions options);
+    void updateMapWithLocationOnly(Location location, boolean addToPolyline);
 
-    void updateMapWithLocationOnly(LatLng latLng);
 }

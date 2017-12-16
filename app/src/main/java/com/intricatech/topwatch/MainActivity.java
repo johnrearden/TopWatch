@@ -8,13 +8,12 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.location.LocationManager;
+import android.location.Location;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.view.ViewPager;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
@@ -27,14 +26,12 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.GridLayout;
 import android.widget.ImageButton;
-import android.widget.LinearLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.PolylineOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,39 +45,40 @@ public class MainActivity extends AppCompatActivity
 
     private String TAG;  // The tag
     private static final int FINE_LOCATION_REQUEST_CODE = 111;
+    private static int instanceNumber = 0;
 
     private static final String LAP_BUTTON_RUNNING_TEXT = "LAP";
     private static final String LAP_BUTTON_PAUSED_TEXT = "SAVE";
 
     private String routeNameChosenByUser;
 
-    private LocationManager locationManager;
     private Vibrations vibrations;
-
     private StopWatch stopWatch;
     private DatabaseFacade databaseFacade;
     private Timer timer;
+    private RouteTrackerFragment routeTrackerFragment;
+    private CustomMapFragment customMapFragment;
+    private SplitDisplayFragment splitDisplayFragment;
+    //todo Put the fragments back into the enum, check if it works. Log message when instantiating for timing check.
 
     private Toolbar toolbar;
     private TextView mainTimerTV;
-    private TextView timeSinceLastSplitTV;
     private FrameLayout routeChooserLayout;
-    private LinearLayout splitLayout;
-    private GridLayout GPSGridLayout;
     private ImageButton playButton;
     private Button lapButton, resetButton;
     private TextView totalDistanceTV, accuracyTV;
+    private ImageView gpsQualityIV;
+    private GPSQuality gpsQuality;
 
     private boolean locationPermissionGranted;
     private List<OnDestroyObserver> observers;
 
+    private ViewPager viewPager;
+    private SwipeViewPagerAdapter swipeViewPagerAdapter;
+
     private LocationRecordServer locationService = null;
     private boolean locationServiceBound;
     private LocationRecordClient locationRecordClient = new LocationRecordClient() {
-        @Override
-        public void setLocationRecord(LocationRecord locationRecord) {
-            Log.d(TAG, locationRecord.toString());
-        }
 
         @Override
         public void setTotalDistance(double totalDistanceTravelled) {
@@ -88,11 +86,7 @@ public class MainActivity extends AppCompatActivity
             totalDistanceTV.setText(
                     String.format("%.2f", stopWatch.getTotalDistance())
             );
-        }
-
-        @Override
-        public void setSplitDistance(double splitDistance) {
-
+            routeTrackerFragment.onTotalDistanceCoveredUpdated(totalDistanceTravelled);
         }
 
         @Override
@@ -100,16 +94,15 @@ public class MainActivity extends AppCompatActivity
             accuracyTV.setText(
                     String.format("%.2f", accuracy)
             );
+            gpsQuality = gpsQuality.setQuality(accuracy);
+            gpsQualityIV.setImageResource(gpsQuality.getResourceID());
         }
 
         @Override
-        public void updateMapWithPolyline(PolylineOptions options) {
-            // NOT USED BY MAIN ACTIVITY.
-        }
-
-        @Override
-        public void updateMapWithLocationOnly(LatLng latLng) {
-            // NOT USED BY MAIN ACTIVITY.
+        public void updateMapWithLocationOnly(Location location, boolean addToPolyline) {
+            LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+            customMapFragment.updateMapWithLocationOnly(latLng, addToPolyline);
+            routeTrackerFragment.onLocationUpdatedWhileStopped(location);
         }
     };
     private ServiceConnection serviceConnection = new ServiceConnection() {
@@ -134,44 +127,43 @@ public class MainActivity extends AppCompatActivity
 
         super.onCreate(savedInstanceState);
 
+        TAG = getClass().getSimpleName();
+        observers = new ArrayList<>();
+        DatabaseFacade.initialize(getApplicationContext());
+        databaseFacade = DatabaseFacade.getInstance();
         Vibrations.initialize(getApplicationContext());
         vibrations = Vibrations.getInstance();
+        boolean b = databaseFacade.doesTableExist(DBContract.LocationRecords.CURRENT_SESSION_TABLE_NAME);
+        Log.d(TAG, "current session table exists : " + String.valueOf(b));
 
-        TAG = getClass().getSimpleName();
-        Log.d(TAG, "onCreate() invoked");
+
+        Log.d(TAG, "onCreate() invoked, instance number " + ++instanceNumber);
         setContentView(R.layout.activity_main);
         toolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(toolbar);
 
-        observers = new ArrayList<>();
-
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
-
         stopWatch = new StopWatch(this);
+
+        swipeViewPagerAdapter = new SwipeViewPagerAdapter(getSupportFragmentManager());
+        customMapFragment = swipeViewPagerAdapter.getCustomMapFragment();
+        splitDisplayFragment = swipeViewPagerAdapter.getSplitDisplayFragment();
+        routeTrackerFragment = swipeViewPagerAdapter.getRouteTrackerFragment();
 
         mainTimerTV = (TextView) findViewById(R.id.main_time_readout);
         mainTimerTV.setText(StopWatch.getTimeAsSpannableString(0));
-        timeSinceLastSplitTV = (TextView) findViewById(R.id.time_since_last_split);
-        timeSinceLastSplitTV.setText(StopWatch.getTimeAsSpannableString(0));
         totalDistanceTV = (TextView) findViewById(R.id.total_dist_travelled);
         accuracyTV = (TextView) findViewById(R.id.accuracy);
-        splitLayout = (LinearLayout) findViewById(R.id.split_times_linearlayout);
         routeChooserLayout = (FrameLayout) findViewById(R.id.route_chooser_layout);
         playButton = (ImageButton) findViewById(R.id.play_pause_button);
+        gpsQualityIV = (ImageView) findViewById(R.id.gps_quality_readout);
         resetButton = (Button) findViewById(R.id.reset_button);
         resetButton.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
                 stopWatch.onResetButtonPressed();
-                splitLayout.removeAllViews();
-                playButton.setImageResource(R.drawable.play_icon_stopwatch);
+                customMapFragment.onResetSession();
+                playButton.setImageResource(R.drawable.play_button);
+                splitDisplayFragment.removeViewsFromSplitLayout();
                 locationService.resetSession();
                 totalDistanceTV.setText("0.00");
                 return true;
@@ -179,7 +171,11 @@ public class MainActivity extends AppCompatActivity
         });
         lapButton = (Button) findViewById(R.id.lap_button);
 
-        databaseFacade = DatabaseFacade.getInstance(getApplicationContext());
+        viewPager = (ViewPager) findViewById(R.id.view_pager);
+        viewPager.setAdapter(swipeViewPagerAdapter);
+        viewPager.setCurrentItem(1);
+
+        gpsQuality = GPSQuality.OFF;
     }
 
 
@@ -196,6 +192,9 @@ public class MainActivity extends AppCompatActivity
         } else {
             requestPermissionIfAppropriate();
         }
+        Intent bindIntent = new Intent(this, LocationTrackerService.class);
+        bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+        locationServiceBound = true;
     }
 
     @Override
@@ -211,25 +210,25 @@ public class MainActivity extends AppCompatActivity
                     @Override
                     public void run() {
                         mainTimerTV.setText(stopWatch.getTotalTimeAsString());
-                        timeSinceLastSplitTV.setText(stopWatch.getTimeSinceLastSplitAsString());
+                        SpannableString ss = stopWatch.getTimeSinceLastSplitAsString();
+                        splitDisplayFragment.updateTimeSinceLastSplitTV(ss);
+                        routeTrackerFragment.updateCurrentSplitTime(ss);
                     }
                 });
             }
         }, 4, 4);
 
-        Intent bindIntent = new Intent(this, LocationTrackerService.class);
-        bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
-        locationServiceBound = true;
-
+        stopWatch.loadSharedPreferencesOnStart();
         if (stopWatch.isRunning()) {
-            playButton.setImageResource(R.drawable.pause_icon_stopwatch);
+            playButton.setImageResource(R.drawable.stop_button);
             setResetButtonEnabled(false);
             setLapButtonText(true);
         } else {
-            playButton.setImageResource(R.drawable.play_icon_stopwatch);
+            playButton.setImageResource(R.drawable.play_button);
             setResetButtonEnabled(true);
             setLapButtonText(false);
         }
+
     }
 
 
@@ -239,15 +238,13 @@ public class MainActivity extends AppCompatActivity
         super.onPause();
         Log.d(TAG, "onPause() invoked");
         timer.cancel();
+        timer = null;
 
-        if (locationServiceBound) {
-            unbindService(serviceConnection);
-        }
         if (stopWatch.isNewSessionReadyToStart()) {
             Log.d(TAG, "******Session is inactive ... stopping service");
             stopLocationService();
         }
-        locationServiceBound = false;
+
     }
 
     private void stopLocationService() {
@@ -259,8 +256,13 @@ public class MainActivity extends AppCompatActivity
     public void onStop() {
         super.onStop();
         Log.d(TAG, "onStop() invoked");
+        locationService.unregisterActivity(this);
+        if (locationServiceBound) {
+            unbindService(serviceConnection);
+            locationServiceBound = false;
+        }
         stopWatch.saveSharedPreferencesOnStop();
-        splitLayout.removeAllViews();
+        splitDisplayFragment.removeViewsFromSplitLayout();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED){
         }
@@ -270,8 +272,15 @@ public class MainActivity extends AppCompatActivity
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy() invoked");
-        locationService.unregisterActivity(this);
-        //unbindService(serviceConnection);
+
+        updateDestructionObservers();
+        //databaseFacade.onMainActivityDestroyed();
+        stopWatch.onMainActivityDestroyed();
+        customMapFragment = null;
+        splitDisplayFragment = null;
+        routeTrackerFragment = null;
+        swipeViewPagerAdapter.onMainActivityDestroyed();
+        viewPager = null;
     }
 
     /**
@@ -280,7 +289,6 @@ public class MainActivity extends AppCompatActivity
      * @return true if permission has been granted, false otherwise.
      */
     private boolean checkForLocationPermission() {
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED) {
             return true;
@@ -357,11 +365,11 @@ public class MainActivity extends AppCompatActivity
 
     private void updateControlGUI(boolean stopWatchIsRunning) {
         if (stopWatchIsRunning) {
-            playButton.setImageResource(R.drawable.pause_icon_stopwatch);
+            playButton.setImageResource(R.drawable.stop_button);
             setResetButtonEnabled(false);
             setLapButtonText(true);
         } else {
-            playButton.setImageResource(R.drawable.play_icon_stopwatch);
+            playButton.setImageResource(R.drawable.play_button);
             setResetButtonEnabled(true);
             setLapButtonText(false);
         }
@@ -402,8 +410,10 @@ public class MainActivity extends AppCompatActivity
     private void setLapButtonText(boolean isRunning) {
         if (isRunning) {
             lapButton.setText(LAP_BUTTON_RUNNING_TEXT);
+            //lapButton.setBackgroundResource(R.drawable.round_blue_button);
         } else {
             lapButton.setText(LAP_BUTTON_PAUSED_TEXT);
+            //lapButton.setBackgroundResource(R.drawable.round_purple_button);
         }
     }
 
@@ -430,7 +440,16 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void onRouteNameEntered(String routeName) {
-        stopWatch.saveNewRouteToDB(routeName);
+        long rowID = stopWatch.saveNewRouteToDB(routeName);
+        long currentSessionTime = stopWatch.getTotalTimeInNanos();
+        Log.d(TAG, "onRouteNameEntered() : currentSessionTime ==  " + currentSessionTime);
+        long PBSessionTime = databaseFacade.getPBTimeForRoute(rowID);
+        Log.d(TAG, "onRouteNameEntered() : PBSessionTime ==  " + PBSessionTime);
+
+        if (currentSessionTime < PBSessionTime) {
+            databaseFacade.copyCurrentSessionToPBSession(rowID);
+            Toast.makeText(this, "New PB set!", Toast.LENGTH_LONG).show();
+        }
     }
 
     public void onRouteNameTVPressed(View view) {
@@ -440,12 +459,15 @@ public class MainActivity extends AppCompatActivity
     /**
      * Method takes a spannableString representation of a split-time, inflates a new TextView from
      * the xml layout, sets the text of the TextView and adds it to the split layout.
-     * @param spannableString The pre-formatted string representation of the new split time.
+     * @param timeSS The pre-formatted string representation of the new split time.
+     * @param distanceSS The pre-formatted string representation of the new split distance.
      */
-    public void onNewSplitCreated(SpannableString spannableString) {
-        TextView newSplitTV = (TextView) getLayoutInflater().inflate(R.layout.split_time_element, null, false);
-        newSplitTV.setText(spannableString);
-        splitLayout.addView(newSplitTV, 0);
+    public void onNewSplitCreated(SpannableString timeSS, SpannableString distanceSS) {
+        swipeViewPagerAdapter.getSplitDisplayFragment().onNewSplitCreated(timeSS, distanceSS);
+    }
+
+    public void getSavedSplitsIfAny() {
+        stopWatch.rePostSavedSplits();
     }
 
     private String promptUserForRouteName() {
@@ -501,10 +523,6 @@ public class MainActivity extends AppCompatActivity
                 break;
             case R.id.action_settings:
                 return true;
-            case R.id.action_show_map:
-                Intent intent = new Intent(this, MapActivity.class);
-                startActivity(intent);
-                break;
             case R.id.action_design_new_route:
 
         }
@@ -528,26 +546,26 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void updateObservers() {
+    public void updateDestructionObservers() {
         for (OnDestroyObserver ob : observers) {
             ob.onActivityDestroyed();
         }
     }
 
     @Override
-    public void onRouteChosen(String routeName) {
-        getSupportActionBar().setTitle(routeName);
+    public void onRouteChosen(long rowID) {
+        String titleString = databaseFacade.getRouteNameFromID(rowID);
+        getSupportActionBar().setTitle(titleString);
         getSupportFragmentManager().popBackStack();
         routeChooserLayout.setVisibility(View.GONE);
-    }
-
-    public void onStopServiceButtonPressed(View view) {
-        stopLocationService();
+        routeTrackerFragment.onRouteLoaded(rowID);
     }
 
     private void startLocationServiceIfNotStarted() {
-        Intent startIntent = new Intent(this, LocationTrackerService.class);
+        Intent startIntent = new Intent(getApplicationContext(), LocationTrackerService.class);
         startService(startIntent);
     }
+
+
 
 }

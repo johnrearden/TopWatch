@@ -33,6 +33,7 @@ public class RouteChooserFragment extends ListFragment
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         TAG = getClass().getSimpleName();
+        DatabaseFacade.getInstance().logRouteListTable();
     }
 
     @Override
@@ -59,7 +60,7 @@ public class RouteChooserFragment extends ListFragment
         Log.d(TAG, "onActivityCreated() invoked");
         getActivity().setTitle("Choose a route.");
 
-        cursor = DatabaseFacade.getInstance(getActivity()).getRouteListCursor();
+        cursor = DatabaseFacade.getInstance().getRouteListCursor();
         String[] cols = new String[]{
                 RouteList.COLUMN_NAME_NAME,
                 RouteList.COLUMN_NAME_DISTANCE,
@@ -86,8 +87,8 @@ public class RouteChooserFragment extends ListFragment
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         cursor.moveToPosition(position);
-        String str = cursor.getString(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_NAME));
-        routeChosenListener.onRouteChosen(str);
+        long rowID = cursor.getLong(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_ID));
+        routeChosenListener.onRouteChosen(rowID);
     }
 
     @Override
@@ -125,8 +126,8 @@ public class RouteChooserFragment extends ListFragment
     private void deleteRouteAndDataTable(int indexToDelete) {
         cursor.moveToPosition(indexToDelete);
         long rowId = cursor.getLong(cursor.getColumnIndexOrThrow(RouteList.COLUMN_NAME_ID));
-        DatabaseFacade.getInstance(getContext()).deleteRoute(rowId);
-        cursor = DatabaseFacade.getInstance(getContext()).getRouteListCursor();
+        DatabaseFacade.getInstance().deleteRoute(rowId);
+        cursor = DatabaseFacade.getInstance().getRouteListCursor();
         simpleCursorAdapter.changeCursor(cursor);
         simpleCursorAdapter.notifyDataSetChanged();
     }
@@ -134,5 +135,5 @@ public class RouteChooserFragment extends ListFragment
 }
 
 interface OnRouteChosenListener {
-    public void onRouteChosen(String routeName);
+    public void onRouteChosen(long rowID);
 }

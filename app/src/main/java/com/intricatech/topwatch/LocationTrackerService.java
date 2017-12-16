@@ -9,7 +9,6 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.location.Location;
 import android.os.Binder;
 import android.os.Bundle;
@@ -27,7 +26,6 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.maps.android.SphericalUtil;
 
 import java.util.ArrayList;
@@ -50,6 +48,7 @@ public class LocationTrackerService extends IntentService
     private GoogleApiClient googleApiClient;
     private LocationRequest locationRequest;
 
+    private static int instanceNumber = 0;
     private static final String TAG = "LocationTrackerService";
     public static final String ACTION_LOG = "com.intricatech.topwatch.action.LOG";
     public static final int ONGOING_NOTIFICATION_ID = 101;
@@ -60,13 +59,14 @@ public class LocationTrackerService extends IntentService
     private DatabaseFacade databaseFacade;
 
     private List<LatLng> locations;
-    private PolylineOptions polylineOptions;
 
     private int currentSplitIndex;
     private long elapsedTime;
     private long currentSessionRestartTime;
     private long elapsedSplitTime;
     private long currentSplitRestartTime;
+    private int currentHeartRate;
+    private double cumulativeDistance;
 
     public LocationTrackerService() {
         super("LocationTrackerService");
@@ -81,14 +81,23 @@ public class LocationTrackerService extends IntentService
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "onCreate() invoked");
+        Log.d(TAG, "onCreate() invoked, instance number " + ++instanceNumber);
 
-        databaseFacade = DatabaseFacade.getInstance(getApplicationContext());
+        // Get databaseFacade instance and create/clear current session table.
+        databaseFacade = DatabaseFacade.getInstance();
+        if (databaseFacade.doesTableExist(DBContract.LocationRecords.CURRENT_SESSION_TABLE_NAME)) {
+            // todo create or clear table.
+        }
 
         locations = new ArrayList<>();
-        polylineOptions = new PolylineOptions();
         serviceResponsibilities = ServiceResponsibilities.UPDATE_GUI_ONLY;
 
+        if (checkPermission(getApplicationContext())) {
+            setupLocationService(getApplicationContext());
+        } else {
+            Log.d(TAG, "location permission not granted");
+            // todo handle lack of permission gracefully, stop service.
+        }
     }
 
     @Override
@@ -96,6 +105,9 @@ public class LocationTrackerService extends IntentService
         super.onDestroy();
         Log.d(TAG, "onDestroy() invoked");
         stopLocationUpdates();
+        googleApiClient.unregisterConnectionCallbacks(this);
+        googleApiClient.unregisterConnectionFailedListener(this);
+        googleApiClient.disconnect();
     }
 
     @Override
@@ -117,32 +129,33 @@ public class LocationTrackerService extends IntentService
 
         startForeground(ONGOING_NOTIFICATION_ID, notification);
 
-        if (checkPermission(getApplicationContext())) {
-            setupLocationService(getApplicationContext());
-        }
-
         return Service.START_STICKY;
     }
 
     private void updateGUI(Location location) {
-        LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
         for (Activity client : clients.keySet()) {
             clients.get(client).setAccuracy(location.getAccuracy());
-            clients.get(client).updateMapWithLocationOnly(currentLatLng);
+            clients.get(client).updateMapWithLocationOnly(
+                    location,
+                    serviceResponsibilities == ServiceResponsibilities.UPDATE_CLIENTS_AND_DATABASE);
         }
         Log.d(TAG, "locs.size() = " + locations.size()
-                + ", polyline.size = " + polylineOptions.getPoints().size()
                 + ", acc = " + location.getAccuracy());
     }
 
     private void updateDistanceAndPolyline(Location location) {
         LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
         locations.add(currentLatLng);
+        int size = locations.size();
+        if (size > 1) {
+            cumulativeDistance += SphericalUtil.computeDistanceBetween(
+                    locations.get(size - 1), locations.get(size - 2)
+            );
+        }
         double totalDist = SphericalUtil.computeLength(locations);
-        polylineOptions.add(currentLatLng).width(15.0f).color(Color.WHITE);
+        Log.d(TAG, "total distance = " + totalDist + ", cumulative distance = " + cumulativeDistance);
         for (Activity client : clients.keySet()) {
             clients.get(client).setTotalDistance(totalDist);
-            clients.get(client).updateMapWithPolyline(polylineOptions);
         }
     }
 
@@ -151,7 +164,12 @@ public class LocationTrackerService extends IntentService
         long timeStamp = elapsedTime + currentTime - currentSessionRestartTime;
         Log.d(TAG, "currentTime == " + timeStamp + ", location = " + location + ", splitIndex = " + currentSplitIndex);
 
-        databaseFacade.commitLocationRecord(timeStamp, location, currentSplitIndex);
+        databaseFacade.commitLocationRecord(
+                timeStamp,
+                location,
+                currentSplitIndex,
+                cumulativeDistance,
+                currentHeartRate);
     }
 
     @Override
@@ -200,9 +218,8 @@ public class LocationTrackerService extends IntentService
             elapsedTime = 0;
             currentSplitRestartTime = currentTime;
             elapsedSplitTime = 0;
+            cumulativeDistance = 0;
             databaseFacade.createNewCurrentSessionTable();
-            /*timer = new Timer();
-            timer.scheduleAtFixedRate(new LogTask(), 0, DEFAULT_GAP_BETWEEN_LOCATION_CHECKS);*/
         }
 
         @Override
@@ -213,9 +230,6 @@ public class LocationTrackerService extends IntentService
             long currentTime = SystemClock.elapsedRealtimeNanos();
             elapsedTime += currentTime - currentSessionRestartTime;
             elapsedSplitTime += currentTime - currentSplitRestartTime;
-            /*if (timer != null) {
-                timer.cancel();
-            }*/
         }
 
         @Override
@@ -238,8 +252,9 @@ public class LocationTrackerService extends IntentService
         public void resetSession() {
             Log.d(TAG, "resetSession() invoked()");
             databaseFacade.clearCurrentSessionTable();
+            databaseFacade.deleteCurrentSessionTable();
             locations.clear();
-            polylineOptions = new PolylineOptions();
+            cumulativeDistance = 0;
         }
     }
 
@@ -274,6 +289,7 @@ public class LocationTrackerService extends IntentService
         GoogleApiAvailability googleAPI = GoogleApiAvailability.getInstance();
         int result = googleAPI.isGooglePlayServicesAvailable(this);
         if (result != ConnectionResult.SUCCESS) {
+            Log.d(TAG, "can't connect to google play services");
             return false;
         }
         return true;
@@ -283,23 +299,32 @@ public class LocationTrackerService extends IntentService
         if (googleApiClient.isConnected()) {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
                     && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "no location permission granted");
                 return;
             }
             LocationServices.FusedLocationApi.requestLocationUpdates(
                     googleApiClient, locationRequest, this);
+            Log.d(TAG, "requestLocationUpdates() invoked");
+        } else {
+            Log.d(TAG, "googleApiClient is not connected");
         }
     }
 
     private void stopLocationUpdates() {
-        if (googleApiClient.isConnected()) {
+        if (googleApiClient == null) {
+            return;
+        } else if (googleApiClient.isConnected()) {
             LocationServices.FusedLocationApi
                     .removeLocationUpdates(googleApiClient, this);
+        } else {
+            Log.d(TAG, "googleApiClient not connected - cant disconnect");
         }
     }
 
     @Override
     public void onLocationChanged(Location location) {
         if (location != null) {
+            Log.d(TAG, "location update received by instance number " + instanceNumber);
             switch (serviceResponsibilities) {
                 case UPDATE_GUI_ONLY:
                     updateGUI(location);

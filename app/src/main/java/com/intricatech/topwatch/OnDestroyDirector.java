@@ -12,6 +12,6 @@ public interface OnDestroyDirector {
 
     public void deregisterAll();
 
-    public void updateObservers();
+    public void updateDestructionObservers();
 
 }

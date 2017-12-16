@@ -101,7 +101,7 @@ public class StopWatch {
         TAG = getClass().getSimpleName();
 
         this.callbackActivity = activity;
-        databaseFacade = DatabaseFacade.getInstance(activity);
+        databaseFacade = DatabaseFacade.getInstance();
 
         SHARED_PREF_TAG = activity.getResources().getString(R.string.shared_preferences_tag);
         SPLIT_LIST_TAG = activity.getResources().getString(R.string.split_list_tag);
@@ -126,6 +126,10 @@ public class StopWatch {
 
         session = new Session(currentDate);
         route = null;
+    }
+
+    public void onMainActivityDestroyed() {
+        callbackActivity = null;
     }
 
     /**
@@ -156,8 +160,9 @@ public class StopWatch {
      * Save the current session wrapped in a new Route object to the database.
      * @param name A string chosen by the user.
      */
-    public void saveNewRouteToDB(String name) {
-        databaseFacade.saveNewRouteToDB(name, session, 0);
+    public long saveNewRouteToDB(String name) {
+        long rowID = databaseFacade.saveNewRouteToDB(name, session, totalDistance);
+        return rowID;
     }
 
     /**
@@ -223,9 +228,12 @@ public class StopWatch {
         long currentTime = getCurrentTime();
         long nanos = currentSplitElapsedTime + currentTime - currentSplitLastStartTime;
         double dist = calculateDistanceForCurrentSplit();
-        Split split = new Split(nanos, dist, session.getSplitList().size());
+
+        Split split = new Split(nanos, dist, session.getSplitList().size() + 1);
         session.getSplitList().add(split);
-        callbackActivity.onNewSplitCreated(getMostRecentSplitAsString());
+
+        SpannableString distSS = getSplitDistanceAsString(split);
+        callbackActivity.onNewSplitCreated(getMostRecentSplitTimeAsString(), distSS);
     }
 
     private double calculateDistanceForCurrentSplit() {
@@ -252,7 +260,7 @@ public class StopWatch {
         }
     }
 
-    private long getTotalTimeInNanos() {
+    public long getTotalTimeInNanos() {
         return elapsedTime + (getCurrentTime() - lastStartTime);
     }
 
@@ -271,17 +279,15 @@ public class StopWatch {
      * @return The SpannableString representation of the most recent split time, with index prefix,
      * or null if splitList is empty.
      */
-    public SpannableString getMostRecentSplitAsString() {
+    public SpannableString getMostRecentSplitTimeAsString() {
         if (!session.getSplitList().isEmpty()) {
             Split spl = session.getSplitList().getLast();
             long splitTime = spl.getSplitTime();
-            double distance = spl.getDistance();
             int index = spl.getIndex();
 
             String indexString = String.format("%02d", index);
             String timeString = getTimeAsString(splitTime);
-            String distanceString = "  " + String.format("%.1f", distance) + "m";
-            String fullString = indexString + COLON_SEPARATOR + timeString + distanceString;
+            String fullString = indexString + COLON_SEPARATOR + timeString;
 
             SpannableString spStr = new SpannableString(fullString);
             spStr.setSpan(
@@ -295,7 +301,7 @@ public class StopWatch {
         }
     }
 
-    public SpannableString getSplitAsString(Split split) {
+    public SpannableString getSplitTimeAsString(Split split) {
         Split spl;
         if (split == null) {
             return new SpannableString("empty - split is null");
@@ -317,8 +323,17 @@ public class StopWatch {
         }
     }
 
+    public SpannableString getSplitDistanceAsString(Split split) {
+        if (split == null) {
+            return new SpannableString("empty - split is null");
+        } else {
+            SpannableString str = new SpannableString(String.format("%.2f", split.getDistance()) + "m");
+            return str;
+        }
+    }
+
     /*
-    TODO - Overload this method as follows : getMostRecentSplitAsString(split comparisonSplit) -
+    TODO - Overload this method as follows : getMostRecentSplitTimeAsString(split comparisonSplit) -
     using the best previous split to compare and format accordingly. Colour RED/GREEN?
      */
 
@@ -400,9 +415,6 @@ public class StopWatch {
         if (jsonString != "") {
             retrievedList = gson.fromJson(jsonString, type);
             session.setSplitList(retrievedList);
-            for(Split s : retrievedList) {
-                callbackActivity.onNewSplitCreated(getSplitAsString(s));
-            }
         }
         elapsedTime = sharedPreferences.getLong(ELAPSED_TIME, 0);
         lastStartTime = sharedPreferences.getLong(LAST_START_TIME, 0);
@@ -412,6 +424,12 @@ public class StopWatch {
         recordingType = RecordingType.values()[sharedPreferences.getInt(RECORDING_TYPE, 0)];
         newSessionReadyToStart = sharedPreferences.getBoolean(NEW_SESSION_READY_TO_START, true);
         Log.d(TAG, "loading stopwatch from SharedPrefs : newSessionReadyToStart = " + newSessionReadyToStart);
+    }
+
+    public void rePostSavedSplits() {
+        for(Split s : session.getSplitList()) {
+            callbackActivity.onNewSplitCreated(getSplitTimeAsString(s), getSplitDistanceAsString(s));
+        }
     }
     
     private long getCurrentTime() {

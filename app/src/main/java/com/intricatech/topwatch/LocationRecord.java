@@ -1,62 +1,54 @@
 package com.intricatech.topwatch;
 
 /**
- * Created by Bolgbolg on 17/11/2017.
+ * Created by Bolgbolg on 06/12/2017.
  */
 
 public class LocationRecord {
 
     private final double latitude;
-
     private final double longitude;
-
     private final double elevation;
-
-    private final long timeStampAbsolute;
-
-    private long stopwatchTimeStamp;
+    private final double accuracy;
+    private final long timeStamp;
+    private final int parentSplit;
 
     public LocationRecord(
             double latitude,
             double longitude,
             double elevation,
-            long currentTime) {
+            double accuracy,
+            long timeStamp,
+            int parentSplit) {
         this.latitude = latitude;
         this.longitude = longitude;
         this.elevation = elevation;
-        this.timeStampAbsolute = currentTime;
-    }
-
-    public double getLatitude() {
-        return latitude;
+        this.accuracy = accuracy;
+        this.timeStamp = timeStamp;
+        this.parentSplit = parentSplit;
     }
 
     public double getLongitude() {
         return longitude;
     }
 
+    public double getLatitude() {
+        return latitude;
+    }
+
     public double getElevation() {
         return elevation;
     }
 
-    public long getTimeStampAbsolute() {
-        return timeStampAbsolute;
+    public double getAccuracy() {
+        return accuracy;
     }
 
-    public long getStopwatchTimeStamp() {
-        return stopwatchTimeStamp;
+    public double getTimeStamp() {
+        return timeStamp;
     }
 
-    public void setStopwatchTimeStamp(long stopwatchTimeStamp) {
-        this.stopwatchTimeStamp = stopwatchTimeStamp;
-    }
-
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("timeStampAbsolute == " + getTimeStampAbsolute() + "\n");
-        sb.append("latitude == " + getLatitude() + "\n");
-        sb.append("longitude == " + getLongitude() + "\n");
-        sb.append("elevation == " + getElevation() + "\n");
-        return sb.toString();
+    public double getParentSplit() {
+        return parentSplit;
     }
 }

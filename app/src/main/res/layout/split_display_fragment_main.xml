@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_horizontal">
+
+    <TextView
+        android:id="@+id/time_since_last_split"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/main_time_readout"
+        android:layout_centerHorizontal="true"
+        android:background="@drawable/common_rounded_background_no_outline"
+        android:textAppearance="@android:style/TextAppearance.DeviceDefault.Medium"
+        android:gravity="center"
+        android:padding="5dp"
+        android:text="00:00.00"
+        android:textColor="#ffffff"
+        android:visibility="visible" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="5"
+        android:id="@+id/split_times_scrollview"
+        android:padding="2dp"
+        android:layout_margin="5dp"
+        android:scrollIndicators="right"
+        android:gravity="center"
+        >
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:id="@+id/split_times_linearlayout"
+            android:orientation="vertical"
+            android:gravity="center"
+            >
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

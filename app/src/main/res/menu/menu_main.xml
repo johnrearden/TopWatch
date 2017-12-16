@@ -14,11 +14,6 @@
         android:title="@string/action_settings"
         app:showAsAction="never" />
     <item
-        android:id="@+id/action_show_map"
-        android:orderInCategory="60"
-        android:title="Display Map"
-        app:showAsAction="never"></item>
-    <item
         android:id="@+id/action_design_new_route"
         android:orderInCategory="70"
         android:title="Design New Route"

@@ -11,12 +11,12 @@ import static com.intricatech.topwatch.DBContract.*;
  * Created by Bolgbolg on 06/11/2017.
  */
 
-public class DBHelper extends SQLiteOpenHelper implements OnDestroyObserver{
+public class DBHelper extends SQLiteOpenHelper {
 
     public DBHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
-        OnDestroyDirector director = (OnDestroyDirector) context;
-        director.register(this);
+        //OnDestroyDirector director = (OnDestroyDirector) context;
+        //director.register(this);
     }
 
     @Override
@@ -26,11 +26,9 @@ public class DBHelper extends SQLiteOpenHelper implements OnDestroyObserver{
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-
     }
 
-    @Override
-    public void onActivityDestroyed() {
+    public void onMainActivityDestroyed() {
         close();
     }
 }
